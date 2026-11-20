@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}会议归档{% endblock %}
+{% block content %}
+<div class="card">
+  <h1 style="margin-top:0">会议归档</h1>
+  {% for item in days %}
+  <div style="padding:10px 0;border-top:1px solid #e5e6eb">
+    <a href="/site/{{ item.day.replace('-', '/') }}/index.html">{{ item.day }}</a>
+    <span class="muted">{{ item.count }} 场</span>
+  </div>
+  {% else %}
+  <p class="muted">暂无归档。</p>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ day }} 会议归档{% endblock %}
+{% block content %}
+<div class="card">
+  <h1 style="margin-top:0">{{ day }} 会议归档</h1>
+  {% for m in meetings %}
+  <div style="padding:12px 0;border-top:1px solid #e5e6eb">
+    <a href="/site/{{ day.replace('-', '/') }}/{{ m.uid }}/index.html">
+      <strong>{{ m.title }}</strong>
+    </a>
+    <div class="muted">{{ m.project_name }} · {{ m.recorded_at }}</div>
+  </div>
+  {% else %}
+  <p class="muted">当天暂无会议。</p>
+  {% endfor %}
+</div>
+{% endblock %}
