@@ -1,8 +1,124 @@
 {% extends "base.html" %}
 {% block title %}会议列表 · 会议记忆{% endblock %}
 {% block content %}
-<div class="card">
-  <h1 style="margin-top:0">会议列表</h1>
-  <p class="muted">暂无会议。</p>
+<div class="card" style="margin-bottom:16px">
+  <details>
+    <summary style="cursor:pointer;font-weight:600">上传会议录音</summary>
+    <form id="upload-form" style="margin-top:16px">
+      <div class="field">
+        <label>音频文件</label>
+        <input type="file" name="file" required
+               accept=".m4a,.mp3,.wav,.opus,.aac,.amr,.flac">
+      </div>
+      <div class="field">
+        <label>会议标题（缺省取文件名）</label>
+        <input name="title" placeholder="例如：三季度进度会">
+      </div>
+      <div class="field">
+        <label>项目</label>
+        <select name="project_name" required>
+          {% for p in projects %}<option value="{{ p.name }}">{{ p.name }}</option>{% endfor %}
+        </select>
+        <input name="new_project" placeholder="或输入新项目名（优先于下拉）"
+               style="margin-top:8px">
+      </div>
+      <div class="field">
+        <label>纪要模板</label>
+        <select name="template_key">
+          <option value="standard">常规会议</option>
+          <option value="discussion">座谈交流</option>
+          <option value="report">工作汇报</option>
+        </select>
+      </div>
+      <progress id="upload-progress" value="0" max="100"
+                style="width:100%;display:none"></progress>
+      <button class="btn" type="submit">开始上传</button>
+      <span id="upload-error" class="error"></span>
+    </form>
+  </details>
 </div>
+
+<form method="get" class="card" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">
+  <div class="field" style="margin:0">
+    <label>项目</label>
+    <select name="project_id">
+      <option value="">全部</option>
+      {% for p in projects %}
+      <option value="{{ p.id }}" {% if filters.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field" style="margin:0">
+    <label>状态</label>
+    <select name="status">
+      <option value="">全部</option>
+      {% for key, label in labels.items() %}
+      <option value="{{ key }}" {% if filters.status == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field" style="margin:0">
+    <label>日期</label>
+    <input type="date" name="date" value="{{ filters.date or '' }}">
+  </div>
+  <button class="btn" type="submit">筛选</button>
+</form>
+
+{% for m in meetings %}
+<div class="card" style="margin-top:12px" data-status-url="/api/meetings/{{ m.uid }}/status">
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+    <div>
+      <a href="/m/{{ m.uid }}"><strong>{{ m.title }}</strong></a>
+      <div class="muted">{{ m.project_name }} · {{ m.recorded_at }} · {{ m.duration_sec|mmss }}</div>
+    </div>
+    <div>
+      <span class="chip {% if m.status == 'done' %}done{% elif m.status == 'failed' %}failed{% else %}processing{% endif %}">
+        {{ labels.get(m.status, m.status) }}
+      </span>
+      <span class="muted">待办 {{ m.open_actions }}</span>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card" style="margin-top:12px"><p class="muted">暂无会议。</p></div>
+{% endfor %}
+
+<p class="muted" style="margin-top:20px">
+  共 {{ total }} 场 · <a href="/site/index.html" target="_blank">静态归档</a>
+</p>
+
+<script>
+const form = document.getElementById("upload-form");
+if (form) {
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const newProject = (data.get("new_project") || "").trim();
+    if (newProject) data.set("project_name", newProject);
+    const bar = document.getElementById("upload-progress");
+    const err = document.getElementById("upload-error");
+    bar.style.display = "block";
+    err.textContent = "";
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/meetings");
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) bar.value = e.loaded / e.total * 100; };
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        location.href = "/m/" + JSON.parse(xhr.responseText).uid;
+      } else {
+        try { err.textContent = JSON.parse(xhr.responseText).error.message; }
+        catch (_) { err.textContent = "上传失败"; }
+      }
+    };
+    xhr.onerror = () => { err.textContent = "网络错误"; };
+    xhr.send(data);
+  });
+}
+
+const rows = Array.from(document.querySelectorAll("[data-status-url]"));
+const active = rows.filter(r => !r.querySelector(".chip.done") && !r.querySelector(".chip.failed"));
+if (active.length) {
+  setTimeout(() => location.reload(), 3000);
+}
+</script>
 {% endblock %}
