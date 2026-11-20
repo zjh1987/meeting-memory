@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}会议记忆{% endblock %}</title>
+  {% include "_style.html" %}
+</head>
+<body>
+{% if not standalone %}
+<div class="topbar">
+  <div class="wrap">
+    <a class="brand" href="/">会议记忆</a>
+    <div>
+      <a href="/">会议列表</a>
+      <form method="post" action="/logout" style="display:inline;margin-left:16px">
+        <button class="btn ghost" type="submit">退出</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+<div class="wrap">{% block content %}{% endblock %}</div>
+</body>
+</html>
