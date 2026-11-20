@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
@@ -10,7 +11,7 @@ TEMPLATE_KEYS = {"standard", "discussion", "report"}
 
 
 @router.post("/meetings")
-async def upload(
+def upload(
     request: Request,
     file: UploadFile = File(...),
     title: str = Form(""),
@@ -41,6 +42,12 @@ async def upload(
     except ValueError as exc:
         raise ApiError(413, "too_large", str(exc)) from exc
 
+    meta_path = cfg.inbox_dir / f"{path.stem}.json"
+    if size == 0:
+        path.unlink(missing_ok=True)
+        meta_path.unlink(missing_ok=True)
+        raise ApiError(400, "upload_invalid", "文件为空")
+
     conn = db.connect(cfg.db_path)
     try:
         pid = project_repo.ensure_project(conn, project_name)
@@ -49,9 +56,17 @@ async def upload(
             recorded_at=meta["recorded_at"], audio_filename=path.name,
             audio_size=size, template_key=template_key, status="uploading",
         )
-    except Exception:
+    except sqlite3.IntegrityError:
+        # Harvester 可能已抢先接管该文件并建了同名 uid 的行。
+        if meeting_repo.get_by_uid(conn, uid) is not None:
+            return {"uid": uid}
         path.unlink(missing_ok=True)
-        (cfg.inbox_dir / f"{path.stem}.json").unlink(missing_ok=True)
+        meta_path.unlink(missing_ok=True)
+        raise
+    except Exception:
+        if meeting_repo.get_by_uid(conn, uid) is None:
+            path.unlink(missing_ok=True)
+            meta_path.unlink(missing_ok=True)
         raise
     finally:
         conn.close()

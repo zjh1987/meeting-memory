@@ -50,6 +50,37 @@ def test_upload_rejects_bad_suffix_and_missing_project(cfg):
         client.__exit__(None, None, None)
 
 
+def test_upload_rejects_empty_file(cfg):
+    client = _client(cfg)
+    try:
+        resp = client.post(
+            "/api/meetings",
+            files={"file": ("a.m4a", b"", "audio/mp4")},
+            data={"title": "空文件", "project_name": "项目A"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "upload_invalid"
+        assert not list(cfg.inbox_dir.iterdir())
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_upload_long_chinese_title_filename_within_limit(cfg):
+    client = _client(cfg)
+    try:
+        resp = client.post(
+            "/api/meetings",
+            files={"file": ("a.m4a", b"fake-bytes", "audio/mp4")},
+            data={"title": "长" * 100, "project_name": "项目A"},
+        )
+        assert resp.status_code == 200
+        audio = [p for p in cfg.inbox_dir.iterdir() if p.suffix.lower() == ".m4a"]
+        assert len(audio) == 1
+        assert len(audio[0].name.encode("utf-8")) <= 255
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_projects_endpoint(cfg):
     client = _client(cfg)
     try:

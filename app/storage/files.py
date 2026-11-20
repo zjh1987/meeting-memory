@@ -29,6 +29,12 @@ def free_gb(path: Path) -> float:
 def save_stream(src, inbox: Path, uid: str, title: str, ext: str,
                 meta: dict, max_bytes: int | None = None):
     """从文件对象读入，返回 (最终路径, 字节数, sha256)。失败时清理残片。"""
+    # 文件名整体（含 uid、__、扩展名与 .part）限制在 200 字节内，避免超出
+    # ext4 的 255 字节上限；按 UTF-8 字节裁剪，不破坏多字节字符。
+    budget = 200 - len(uid.encode()) - len("__") - len(ext.encode()) - len(".part")
+    raw = title.encode("utf-8")
+    if len(raw) > budget:
+        title = raw[:max(budget, 0)].decode("utf-8", "ignore")
     stem = f"{uid}__{title}"
     part = inbox / f"{stem}{ext}.part"
     meta_path = inbox / f"{stem}.json"
