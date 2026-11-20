@@ -4,6 +4,7 @@ import argparse
 import shutil
 import sqlite3
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,8 +33,14 @@ def delete(cfg, uid: str) -> int:
         for path in base.glob(f"{uid}__*"):
             path.unlink(missing_ok=True)
 
-    day = row["recorded_at"][:10].split("-")
-    shutil.rmtree(cfg.site_dir.joinpath(*day, uid), ignore_errors=True)
+    day = (row["recorded_at"] or "")[:10]
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except ValueError:
+        print(f"警告：recorded_at 非法（{row['recorded_at']!r}），跳过静态归档删除")
+    else:
+        shutil.rmtree(cfg.site_dir.joinpath(*day.split("-"), uid),
+                       ignore_errors=True)
 
     from app.pipeline import archive
     archive.refresh_indices(cfg)

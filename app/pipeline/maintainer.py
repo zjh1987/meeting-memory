@@ -6,6 +6,7 @@ import traceback
 from datetime import datetime, timedelta
 
 from app.config import Config
+from app.core.logging import log_event
 from app.storage import db, files, meeting_repo
 
 MAX_RECLAIMS = 3
@@ -77,6 +78,33 @@ def cleanup_parts(cfg: Config, now_ts: float | None = None) -> int:
     return removed
 
 
+def warn_orphan_ready(cfg: Config, now: datetime | None = None) -> int:
+    """记录 ready/ 中超过 24 小时且无数据库记录的孤儿文件。"""
+    moment = now or datetime.now()
+    cutoff = moment.timestamp() - 24 * 3600
+    if not cfg.ready_dir.is_dir():
+        return 0
+    conn = db.connect(cfg.db_path)
+    try:
+        known = {row["audio_filename"] for row in conn.execute(
+            "SELECT audio_filename FROM meeting"
+            " WHERE audio_filename IS NOT NULL").fetchall()}
+    finally:
+        conn.close()
+    orphans = 0
+    for path in sorted(cfg.ready_dir.iterdir()):
+        if not path.is_file() or path.name in known:
+            continue
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            continue
+        if mtime < cutoff:
+            log_event("warn", "orphan_ready", filename=path.name)
+            orphans += 1
+    return orphans
+
+
 def start(cfg: Config, stop: threading.Event) -> threading.Thread:
     def loop() -> None:
         while not stop.is_set():
@@ -84,6 +112,7 @@ def start(cfg: Config, stop: threading.Event) -> threading.Thread:
                 reclaim_zombies(cfg)
                 fail_stale_uploads(cfg)
                 cleanup_parts(cfg)
+                warn_orphan_ready(cfg)
             except Exception:
                 traceback.print_exc()
             stop.wait(60)

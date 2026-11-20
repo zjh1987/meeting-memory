@@ -12,6 +12,13 @@ from pathlib import Path
 from app.config import Config
 from app.providers.errors import ProviderError
 
+# 模型加载很重，按 (模型目录, 设备) 复用，避免每场会议重复加载。
+_MODELS: dict[tuple[str, str], object] = {}
+
+
+def _reset_cache_for_tests() -> None:
+    _MODELS.clear()
+
 
 class FunAsrProvider:
     def __init__(self, cfg: Config):
@@ -23,27 +30,32 @@ class FunAsrProvider:
     def _load(self):
         if self._model is not None:
             return self._model
-        try:
-            from funasr import AutoModel
-        except ImportError as exc:
-            raise ProviderError(
-                "asr_unavailable",
-                "未安装 funasr，请执行 python -m pip install -r requirements-asr.txt",
-            ) from exc
         dirs = {name: self.model_dir / name
                 for name in ("asr", "vad", "punc", "spk")}
         for label, path in dirs.items():
             if not path.exists():
                 raise ProviderError("asr_unavailable", f"模型目录缺失：{path}")
-        self._model = AutoModel(
-            model=str(dirs["asr"]),
-            vad_model=str(dirs["vad"]),
-            punc_model=str(dirs["punc"]),
-            spk_model=str(dirs["spk"]),
-            device=self.device,
-            disable_update=True,
-        )
-        return self._model
+        key = (str(self.model_dir), self.device)
+        model = _MODELS.get(key)
+        if model is None:
+            try:
+                from funasr import AutoModel
+            except ImportError as exc:
+                raise ProviderError(
+                    "asr_unavailable",
+                    "未安装 funasr，请执行 python -m pip install -r requirements-asr.txt",
+                ) from exc
+            model = AutoModel(
+                model=str(dirs["asr"]),
+                vad_model=str(dirs["vad"]),
+                punc_model=str(dirs["punc"]),
+                spk_model=str(dirs["spk"]),
+                device=self.device,
+                disable_update=True,
+            )
+            _MODELS[key] = model
+        self._model = model
+        return model
 
     def _hotwords(self) -> str | None:
         if not self.hotword_file.exists():
