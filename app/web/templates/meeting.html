@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}{{ m.title }} · 会议记忆{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:start;gap:16px">
+    <div>
+      <h1 style="margin:0 0 6px">{{ m.title }}</h1>
+      <div class="muted">{{ project_name }} · {{ m.recorded_at }} · {{ m.duration_sec|mmss }}</div>
+    </div>
+    <div style="text-align:right">
+      <span class="chip {% if m.status == 'done' %}done{% elif m.status == 'failed' %}failed{% else %}processing{% endif %}">
+        {{ labels.get(m.status, m.status) }}
+      </span>
+      {% if m.error_code %}
+      <div class="error" style="margin-top:8px">{{ m.error_code }}：{{ m.error_msg or '' }}</div>
+      {% endif %}
+      {% if can_retry and not standalone %}
+      <button class="btn" id="retry-btn" style="margin-top:10px">重试</button>
+      {% endif %}
+    </div>
+  </div>
+  {% if not finished %}
+  <p class="muted" style="margin-bottom:0">处理中，页面每 3 秒自动刷新。</p>
+  {% endif %}
+</div>
+
+{% if minutes %}
+{% if 'summary' in tmpl.sections %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">摘要</h2>
+  <p style="margin-bottom:0">{{ minutes.summary }}</p>
+</div>
+{% endif %}
+
+{% if 'topics' in tmpl.sections and minutes.topics %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">议题</h2>
+  {% for topic in minutes.topics %}
+  <div style="margin-bottom:14px">
+    <strong>{{ topic.title }}</strong>
+    <ul style="margin:6px 0 0;padding-left:20px">
+      {% for point in topic.points %}<li>{{ point }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if 'decisions' in tmpl.sections and minutes.decisions %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">决定事项</h2>
+  {% for item in minutes.decisions %}
+  <div style="margin-bottom:12px">
+    <div>{{ item.text }}</div>
+    <blockquote class="muted" style="margin:4px 0 0;border-left:3px solid #d0d3d9;padding-left:10px">
+      {{ item.quote }}
+    </blockquote>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if 'actions' in tmpl.sections and actions %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">待办事项</h2>
+  {% for item in actions %}
+  <div style="margin-bottom:12px">
+    <div><strong>{{ item.owner }}</strong>：{{ item.task }}
+      {% if item.due %}<span class="muted">（{{ item.due }}）</span>{% endif %}
+    </div>
+    <blockquote class="muted" style="margin:4px 0 0;border-left:3px solid #d0d3d9;padding-left:10px">
+      {{ item.quote }}
+    </blockquote>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if 'open_issues' in tmpl.sections and minutes.open_issues %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">待定事项</h2>
+  {% for item in minutes.open_issues %}
+  <div style="margin-bottom:12px">
+    <div>{{ item.text }} <span class="muted">（{{ item.reason }}）</span></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if 'people' in tmpl.sections and minutes.people %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">参会人员</h2>
+  <p style="margin-bottom:0">
+    {% for person in minutes.people %}{{ person.name }}（{{ person.role }}）{% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
+</div>
+{% endif %}
+{% endif %}
+
+{% if relations %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">与以往会议的关联</h2>
+  {% for item in relations %}
+  <div style="margin-bottom:14px">
+    <strong>{{ '上次待办未落实' if item.kind == 'pending_carryover' else '议题重复' }}</strong>
+    <div>{{ item.detail }}</div>
+    <blockquote class="muted" style="margin:4px 0;border-left:3px solid #d0d3d9;padding-left:10px">
+      {{ item.quote }}
+    </blockquote>
+    <a href="/m/{{ item.target_uid }}">{{ item.target_title }} · {{ item.target_time }}</a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if transcript %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">逐字稿</h2>
+  {% for seg in transcript %}
+  <div style="margin:8px 0">
+    <span class="muted">{{ seg.start|mmss }} {{ seg.speaker }}</span>
+    <span>{{ seg.text }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<p style="margin-top:20px"><a href="/">返回列表</a></p>
+
+<script>
+const retryBtn = document.getElementById("retry-btn");
+if (retryBtn) {
+  retryBtn.addEventListener("click", async () => {
+    const resp = await fetch("/api/meetings/{{ m.uid }}/retry", {method: "POST"});
+    if (resp.ok) location.reload();
+    else alert("当前状态不允许重试");
+  });
+}
+{% if not finished %}setTimeout(() => location.reload(), 3000);{% endif %}
+</script>
+{% endblock %}

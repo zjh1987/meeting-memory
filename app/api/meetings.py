@@ -38,3 +38,18 @@ def meeting_status(request: Request, uid: str):
         }
     finally:
         conn.close()
+
+
+@router.post("/meetings/{uid}/retry")
+def retry_meeting(request: Request, uid: str):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        m = meeting_repo.get_by_uid(conn, uid)
+        if not m:
+            raise ApiError(404, "not_found", "会议不存在")
+        if not state.can_retry(m):
+            raise ApiError(409, "invalid_state", "当前状态不允许重试")
+        meeting_repo.reset_for_retry(conn, m["id"])
+        return {"status": "pending"}
+    finally:
+        conn.close()
