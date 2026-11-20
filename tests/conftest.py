@@ -21,4 +21,14 @@ def cfg(tmp_path, monkeypatch):
     monkeypatch.setenv("FUNASR_MODEL_DIR", str(tmp_path / "models"))
     config = Config.from_env()
     config.ensure_dirs()
+    from app.storage import db
+    db.init_db(config.db_path, db.MIGRATIONS_DIR)
     return config
+
+
+@pytest.fixture
+def conn(cfg):
+    from app.storage import db
+    connection = db.connect(cfg.db_path)
+    yield connection
+    connection.close()
