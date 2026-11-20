@@ -74,3 +74,22 @@ def test_reclaim_zombies(cfg):
         assert m["retry_count"] == 1
     finally:
         conn.close()
+
+
+def test_reclaim_zombies_marks_exhausted_relating_as_failed(cfg):
+    mid = _pending(cfg)
+    conn = db.connect(cfg.db_path)
+    try:
+        old = (datetime.now() - timedelta(seconds=600)).strftime("%Y-%m-%d %H:%M:%S")
+        meeting_repo.update_fields(conn, mid, status="relating", retry_count=3,
+                                   started_at=old, heartbeat_at=old)
+    finally:
+        conn.close()
+    assert maintainer.reclaim_zombies(cfg) == 1
+    conn = db.connect(cfg.db_path)
+    try:
+        m = meeting_repo.get_by_id(conn, mid)
+        assert m["status"] == "failed"
+        assert m["error_code"] == "worker_timeout"
+    finally:
+        conn.close()

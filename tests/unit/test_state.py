@@ -8,6 +8,7 @@ def test_legal_transitions():
     assert state.can_transition("transcribing", "minuting")
     assert state.can_transition("transcribing", "relating")
     assert state.can_transition("minuting", "done")
+    assert state.can_transition("relating", "failed")
     assert state.can_transition("done", "failed")
     assert state.can_transition("failed", "pending")
     assert state.can_transition("done", "pending")

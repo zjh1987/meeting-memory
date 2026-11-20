@@ -27,6 +27,7 @@ _ALLOWED = {
     ("minuting", "failed"),
     ("relating", "done"),
     ("relating", "pending"),
+    ("relating", "failed"),
     ("failed", "pending"),
     ("done", "failed"),
     ("done", "pending"),

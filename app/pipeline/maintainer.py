@@ -24,17 +24,20 @@ def reclaim_zombies(cfg: Config, now: datetime | None = None) -> int:
             (cutoff,),
         ).fetchall()
         for row in rows:
-            if row["retry_count"] >= MAX_RECLAIMS:
-                meeting_repo.set_status(conn, row["id"], "failed",
-                                        "worker_timeout", "处理超时 3 次")
-            else:
-                meeting_repo.update_fields(
-                    conn, row["id"], status="pending",
-                    retry_count=row["retry_count"] + 1,
-                    error_code="worker_timeout",
-                    error_msg="心跳超时，已重新排队",
-                    started_at=None, heartbeat_at=None,
-                )
+            try:
+                if row["retry_count"] >= MAX_RECLAIMS:
+                    meeting_repo.set_status(conn, row["id"], "failed",
+                                            "worker_timeout", "处理超时 3 次")
+                else:
+                    meeting_repo.update_fields(
+                        conn, row["id"], status="pending",
+                        retry_count=row["retry_count"] + 1,
+                        error_code="worker_timeout",
+                        error_msg="心跳超时，已重新排队",
+                        started_at=None, heartbeat_at=None,
+                    )
+            except Exception:
+                traceback.print_exc()
         return len(rows)
     finally:
         conn.close()
