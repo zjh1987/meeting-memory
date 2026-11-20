@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}会议列表{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1 style="font-size:20px;margin:0">会议列表</h1>
+  <button class="btn" id="sim">模拟设备上传</button>
+</div>
+
+<div class="card">
+  {% if meetings %}
+    {% for m in meetings %}
+    <a class="rowlink" href="/m/{{ m.uid }}">
+      <div>
+        <div class="rt">{{ m.title }}</div>
+        <div class="meta" style="margin-top:4px">
+          <span>{{ m.recorded_at }}</span>
+          <span>{{ m.project }}</span>
+        </div>
+      </div>
+      <span class="pill {{ 'done' if m.status == 'done' else ('failed' if m.status == 'failed' else 'working') }}">{{ m.status_label }}</span>
+    </a>
+    {% endfor %}
+  {% else %}
+    <p class="empty">还没有会议。点右上角「模拟设备上传」，或把音频直接放进 data/inbox/。</p>
+  {% endif %}
+</div>
+
+<p class="note">文件命名：<code>UID__标题.m4a</code>。写入时先存 <code>.part</code>，传完再改名，服务端只认改完名的完整文件。</p>
+
+<script>
+(function () {
+  var btn = document.getElementById('sim');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    btn.textContent = '上传中…';
+    fetch('/api/dev/simulate', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var uid = d.uid;
+        var t = setInterval(function () {
+          fetch('/api/status/' + encodeURIComponent(uid))
+            .then(function (r) { return r.json(); })
+            .then(function (s) {
+              btn.textContent = s.status_label + '…';
+              if (s.status === 'done' || s.status === 'failed') {
+                clearInterval(t);
+                location.href = '/m/' + encodeURIComponent(uid);
+              }
+            })
+            .catch(function () {});
+        }, 1500);
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.textContent = '模拟设备上传';
+      });
+  });
+})();
+</script>
+{% endblock %}

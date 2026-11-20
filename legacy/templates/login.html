@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}登录{% endblock %}
+{% block content %}
+<div class="card" style="max-width:360px;margin:64px auto">
+  <h2>输入访问口令</h2>
+  <form method="post" action="/login">
+    <input type="password" name="password" placeholder="访问口令" autofocus>
+    {% if error %}<p class="empty" style="color:var(--danger);margin-top:-8px">{{ error }}</p>{% endif %}
+    <button class="btn" type="submit">进入</button>
+  </form>
+</div>
+{% endblock %}

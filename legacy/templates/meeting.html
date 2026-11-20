@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}{{ m.title }}{% endblock %}
+{% block content %}
+
+<a href="/" class="hint">← 返回列表</a>
+
+{% if m.status == 'failed' %}
+<div class="banner failed">处理失败：{{ m.error or '未知错误' }}（音频已保留，可重试）</div>
+{% elif not finished %}
+<div class="banner">当前状态：<span id="st">{{ status_label }}</span> — 完成后页面会自动刷新</div>
+{% endif %}
+
+<h1 style="margin-top:16px">{{ m.title }}</h1>
+<div class="meta">
+  <span>{{ m.recorded_at }}</span>
+  <span>{{ m.project }}</span>
+  <span>{{ tmpl.name }}</span>
+  <span>时长 {{ m.duration_sec | mmss }}</span>
+  <span class="pill {{ 'done' if m.status == 'done' else ('failed' if m.status == 'failed' else 'working') }}">{{ status_label }}</span>
+</div>
+
+{% if 'summary' in tmpl.sections and minutes.summary %}
+<div class="card" style="margin-top:20px">
+  <h2>一句话摘要</h2>
+  <p style="margin:0">{{ minutes.summary }}</p>
+</div>
+{% endif %}
+
+{% if 'topics' in tmpl.sections and minutes.topics %}
+<div class="card">
+  <h2>议题与讨论</h2>
+  {% for t in minutes.topics %}
+    <div style="margin-bottom:16px">
+      <div style="font-weight:500">{{ t.title }}</div>
+      <ul>
+        {% for p in t.points %}<li>{{ p }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if 'people' in tmpl.sections and minutes.people %}
+<div class="card">
+  <h2>参会人观点</h2>
+  <ul>
+    {% for p in minutes.people %}
+      <li><strong>{{ p.name }}</strong>：{{ p.stance }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if 'decisions' in tmpl.sections %}
+<div class="card">
+  <h2>结论与决策</h2>
+  {% if minutes.decisions %}
+    {% for d in minutes.decisions %}
+      <div style="margin-bottom:12px">
+        <div>{{ d.text }}</div>
+        <div class="quote">{{ d.owner }}{% if d.quote %} · 原话：{{ d.quote }}{% endif %}</div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">本次没有识别到明确的决策</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if 'actions' in tmpl.sections %}
+<div class="card">
+  <h2>待办事项</h2>
+  {% if actions %}
+  <table>
+    <thead><tr><th style="width:90px">负责人</th><th>事项</th><th style="width:80px">时间</th></tr></thead>
+    <tbody>
+      {% for a in actions %}
+      <tr>
+        <td>{{ a.owner or '—' }}</td>
+        <td>
+          {{ a.task }}
+          {% if a.quote %}<div class="quote">{{ a.quote }}</div>{% endif %}
+        </td>
+        <td>{{ a.due or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">本次没有提取到待办</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if 'open_issues' in tmpl.sections %}
+<div class="card">
+  <h2>分歧与未决</h2>
+  {% if minutes.open_issues %}
+    <ul>{% for i in minutes.open_issues %}<li>{{ i }}</li>{% endfor %}</ul>
+  {% else %}
+    <p class="empty">没有遗留未决事项</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if relations %}
+<div class="card">
+  <h2>与以往会议的关联</h2>
+  {% for r in relations %}
+  <div class="rel">
+    <span class="tag">{{ '待办未落实' if r.kind == 'pending_carryover' else '议题重复' }}</span>
+    <div>
+      <div>{{ r.detail }}</div>
+      <div class="quote">
+        <a href="/m/{{ r.target_uid }}" style="color:var(--brand)">{{ r.target_title }}</a>
+        （{{ r.target_time }}）
+        {% if r.quote %}· {{ r.quote }}{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if transcript %}
+<div class="card">
+  <details>
+    <summary>查看转写全文（{{ transcript|length }} 段）</summary>
+    <div style="margin-top:12px">
+      {% for s in transcript %}
+      <div class="seg">
+        <span class="at">{{ s.start | mmss }}</span>
+        <span class="who">{{ s.speaker }}</span>
+        <span>{{ s.text }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+</div>
+{% endif %}
+
+<p class="note">本页内容由模型自动生成，关键结论与待办请核对原文后再使用。</p>
+
+{% if not finished and m.status != 'failed' %}
+<script>
+(function () {
+  var uid = {{ m.uid | tojson }};
+  var timer = setInterval(function () {
+    fetch('/api/status/' + encodeURIComponent(uid))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var el = document.getElementById('st');
+        if (el) el.textContent = d.status_label;
+        if (d.status === 'done' || d.status === 'failed') {
+          clearInterval(timer);
+          location.reload();
+        }
+      })
+      .catch(function () {});
+  }, 2000);
+})();
+</script>
+{% endif %}
+{% endblock %}

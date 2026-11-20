@@ -1,0 +1,4 @@
+funasr>=1.1
+torch
+torchaudio
+modelscope
