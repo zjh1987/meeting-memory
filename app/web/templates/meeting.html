@@ -1,44 +1,66 @@
 {% extends "base.html" %}
 {% block title %}{{ m.title }} · 会议记忆{% endblock %}
 {% block content %}
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:start;gap:16px">
-    <div>
-      <h1 style="margin:0 0 6px">{{ m.title }}</h1>
-      <div class="muted">{{ project_name }} · {{ m.recorded_at }} · {{ m.duration_sec|mmss }}</div>
+<div class="page-head">
+  <div>
+    <h1>{{ m.title }}{% if m.closed %} <span class="chip closed">已结案</span>{% endif %}</h1>
+    <div class="sub">
+      {{ project_name }} · {{ m.recorded_at }} · {{ m.duration_sec|mmss }}
+      {% if m.asr_seconds %} · 转写耗时 {{ '%.1f'|format(m.asr_seconds) }} 秒{% endif %}
     </div>
-    <div style="text-align:right">
+  </div>
+  <div class="actions">
+    {% if can_retry and not standalone %}
+    <button class="btn ghost small" id="retry-btn"
+            data-tip="从上次中断的阶段继续处理">重试</button>
+    {% endif %}
+    {% if finished and transcript and not standalone %}
+    <button class="btn ghost small" id="regen-btn"
+            data-tip="保留逐字稿，只重新生成纪要与关联">重新生成纪要</button>
+    {% endif %}
+    {% if finished and not standalone %}
+    <button class="btn ghost small" id="close-btn"
+            data-tip="结案后不再被后续会议引用为关联">{% if m.closed %}取消结案{% else %}标记结案{% endif %}</button>
+    {% endif %}
+    <a class="btn ghost small" href="/" data-tip="返回会议列表">返回列表</a>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div>
       <span class="chip {% if m.status == 'done' %}done{% elif m.status == 'failed' %}failed{% else %}processing{% endif %}">
         {{ labels.get(m.status, m.status) }}
       </span>
-      {% if m.error_code %}
-      <div class="error" style="margin-top:8px">{{ m.error_code }}：{{ m.error_msg or '' }}</div>
-      {% endif %}
-      {% if can_retry and not standalone %}
-      <button class="btn" id="retry-btn" style="margin-top:10px">重试</button>
-      {% endif %}
+      <span class="muted" style="margin-left:8px">{{ progress }}%</span>
     </div>
+    {% if not finished %}<span class="muted">处理中，页面每 3 秒自动刷新</span>{% endif %}
   </div>
   {% if not finished %}
-  <p class="muted" style="margin-bottom:0">处理中，页面每 3 秒自动刷新。</p>
+  <div class="progress stage" style="margin-top:12px" data-tip="按处理阶段估算">
+    <i style="width:{{ progress }}%"></i>
+  </div>
+  {% endif %}
+  {% if m.error_code %}
+  <div class="error" style="margin-bottom:0">{{ m.error_code }}：{{ m.error_msg or '' }}</div>
   {% endif %}
 </div>
 
 {% if minutes %}
 {% if 'summary' in tmpl.sections %}
-<div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">摘要</h2>
-  <p style="margin-bottom:0">{{ minutes.summary }}</p>
+<div class="card">
+  <h2 class="section-title">摘要</h2>
+  <p style="margin:0">{{ minutes.summary }}</p>
 </div>
 {% endif %}
 
 {% if 'topics' in tmpl.sections and minutes.topics %}
-<div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">议题</h2>
+<div class="card">
+  <h2 class="section-title">议题</h2>
   {% for topic in minutes.topics %}
-  <div style="margin-bottom:14px">
+  <div style="margin-bottom:16px">
     <strong>{{ topic.title }}</strong>
-    <ul style="margin:6px 0 0;padding-left:20px">
+    <ul style="margin:8px 0 0;padding-left:20px">
       {% for point in topic.points %}<li>{{ point }}</li>{% endfor %}
     </ul>
   </div>
@@ -47,38 +69,34 @@
 {% endif %}
 
 {% if 'decisions' in tmpl.sections and minutes.decisions %}
-<div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">决定事项</h2>
+<div class="card">
+  <h2 class="section-title">决定事项</h2>
   {% for item in minutes.decisions %}
-  <div style="margin-bottom:12px">
+  <div style="margin-bottom:14px">
     <div>{{ item.text }}</div>
-    <blockquote class="muted" style="margin:4px 0 0;border-left:3px solid #d0d3d9;padding-left:10px">
-      {{ item.quote }}
-    </blockquote>
+    <blockquote>{{ item.quote }}</blockquote>
   </div>
   {% endfor %}
 </div>
 {% endif %}
 
 {% if 'actions' in tmpl.sections and actions %}
-<div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">待办事项</h2>
+<div class="card">
+  <h2 class="section-title">待办事项</h2>
   {% for item in actions %}
-  <div style="margin-bottom:12px">
+  <div style="margin-bottom:14px">
     <div><strong>{{ item.owner }}</strong>：{{ item.task }}
       {% if item.due %}<span class="muted">（{{ item.due }}）</span>{% endif %}
     </div>
-    <blockquote class="muted" style="margin:4px 0 0;border-left:3px solid #d0d3d9;padding-left:10px">
-      {{ item.quote }}
-    </blockquote>
+    <blockquote>{{ item.quote }}</blockquote>
   </div>
   {% endfor %}
 </div>
 {% endif %}
 
 {% if 'open_issues' in tmpl.sections and minutes.open_issues %}
-<div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">待定事项</h2>
+<div class="card">
+  <h2 class="section-title">待定事项</h2>
   {% for item in minutes.open_issues %}
   <div style="margin-bottom:12px">
     <div>{{ item.text }} <span class="muted">（{{ item.reason }}）</span></div>
@@ -88,9 +106,9 @@
 {% endif %}
 
 {% if 'people' in tmpl.sections and minutes.people %}
-<div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">参会人员</h2>
-  <p style="margin-bottom:0">
+<div class="card">
+  <h2 class="section-title">参会人员</h2>
+  <p style="margin:0">
     {% for person in minutes.people %}{{ person.name }}（{{ person.role }}）{% if not loop.last %} · {% endif %}{% endfor %}
   </p>
 </div>
@@ -98,15 +116,13 @@
 {% endif %}
 
 {% if relations %}
-<div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">与以往会议的关联</h2>
+<div class="card">
+  <h2 class="section-title">与以往会议的关联</h2>
   {% for item in relations %}
   <div style="margin-bottom:14px">
     <strong>{{ '上次待办未落实' if item.kind == 'pending_carryover' else '议题重复' }}</strong>
     <div>{{ item.detail }}</div>
-    <blockquote class="muted" style="margin:4px 0;border-left:3px solid #d0d3d9;padding-left:10px">
-      {{ item.quote }}
-    </blockquote>
+    <blockquote>{{ item.quote }}</blockquote>
     <a href="/m/{{ item.target_uid }}">{{ item.target_title }} · {{ item.target_time }}</a>
   </div>
   {% endfor %}
@@ -114,18 +130,24 @@
 {% endif %}
 
 {% if transcript %}
-<div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">逐字稿</h2>
-  {% for seg in transcript %}
-  <div style="margin:8px 0">
-    <span class="muted">{{ seg.start|mmss }} {{ seg.speaker }}</span>
-    <span>{{ seg.text }}</span>
-  </div>
-  {% endfor %}
+<div class="card">
+  <details class="transcript">
+    <summary data-tip="逐字稿默认折叠，展开后可搜索">逐字稿（{{ transcript|length }} 段）</summary>
+    <div style="margin-top:14px">
+      <input id="seg-search" class="input" placeholder="搜索说话人或内容，例如：预算 / 张敏">
+      <div id="seg-list" style="margin-top:8px">
+        {% for seg in transcript %}
+        <div class="seg-row" data-text="{{ seg.speaker }} {{ seg.text }}">
+          <span class="who">{{ seg.start|mmss }} {{ seg.speaker }}</span>
+          <span>{{ seg.text }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p id="seg-empty" class="muted hidden">没有匹配的片段。</p>
+    </div>
+  </details>
 </div>
 {% endif %}
-
-<p style="margin-top:20px"><a href="/">返回列表</a></p>
 
 <script>
 const retryBtn = document.getElementById("retry-btn");
@@ -134,6 +156,41 @@ if (retryBtn) {
     const resp = await fetch("/api/meetings/{{ m.uid }}/retry", {method: "POST"});
     if (resp.ok) location.reload();
     else alert("当前状态不允许重试");
+  });
+}
+const regenBtn = document.getElementById("regen-btn");
+if (regenBtn) {
+  regenBtn.addEventListener("click", async () => {
+    if (!confirm("将保留逐字稿，重新调用大模型生成纪要与关联，是否继续？")) return;
+    const resp = await fetch("/api/admin/meetings/{{ m.uid }}/regenerate", {method: "POST"});
+    if (resp.ok) location.reload();
+    else alert((await resp.json()).error.message);
+  });
+}
+const closeBtn = document.getElementById("close-btn");
+if (closeBtn) {
+  closeBtn.addEventListener("click", async () => {
+    const resp = await fetch("/api/admin/meetings/{{ m.uid }}/close", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({closed: {{ 'false' if m.closed else 'true' }}})
+    });
+    if (resp.ok) location.reload();
+    else alert((await resp.json()).error.message);
+  });
+}
+const search = document.getElementById("seg-search");
+if (search) {
+  const rows = Array.from(document.querySelectorAll("#seg-list .seg-row"));
+  const empty = document.getElementById("seg-empty");
+  search.addEventListener("input", () => {
+    const keyword = search.value.trim().toLowerCase();
+    let visible = 0;
+    rows.forEach(row => {
+      const hit = !keyword || row.dataset.text.toLowerCase().includes(keyword);
+      row.classList.toggle("hidden", !hit);
+      if (hit) visible += 1;
+    });
+    empty.classList.toggle("hidden", visible > 0);
   });
 }
 {% if not finished %}setTimeout(() => location.reload(), 3000);{% endif %}

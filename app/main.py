@@ -3,8 +3,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
-from app.api import auth, meetings, projects, upload
+from app.api import admin, auth, meetings, projects, upload
 from app.api.auth import COOKIE_NAME, verify_token
 from app.api.errors import ApiError, api_error_handler
 from app.config import Config
@@ -67,7 +68,11 @@ def create_app(cfg: Config | None = None, start_threads: bool = True) -> FastAPI
     app.include_router(upload.router)
     app.include_router(projects.router)
     app.include_router(meetings.router)
+    app.include_router(admin.router)
     app.include_router(pages.router)
+    # 本地/单机部署时也能直接打开静态归档；Nginx 部署时仍可由 Nginx 直接托管。
+    app.mount("/site", StaticFiles(directory=str(cfg.site_dir), html=True),
+              name="site")
     return app
 
 

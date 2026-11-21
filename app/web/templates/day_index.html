@@ -4,7 +4,7 @@
 <div class="card">
   <h1 style="margin-top:0">{{ day }} 会议归档</h1>
   {% for m in meetings %}
-  <div style="padding:12px 0;border-top:1px solid #e5e6eb">
+  <div style="padding:14px 0;border-top:1px solid var(--border)">
     <a href="/site/{{ day.replace('-', '/') }}/{{ m.uid }}/index.html">
       <strong>{{ m.title }}</strong>
     </a>

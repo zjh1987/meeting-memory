@@ -21,11 +21,13 @@ def _reset_cache_for_tests() -> None:
 
 
 class FunAsrProvider:
-    def __init__(self, cfg: Config):
-        self.model_dir = cfg.funasr_model_dir
-        self.device = cfg.funasr_device
+    def __init__(self, cfg: Config, settings: dict | None = None):
+        options = settings or {}
+        self.model_dir = Path(options.get("model_dir", cfg.funasr_model_dir))
+        self.device = options.get("device", cfg.funasr_device)
         self.hotword_file = cfg.hotword_file
-        self.speaker_threshold = cfg.speaker_threshold
+        self.speaker_threshold = float(
+            options.get("speaker_threshold", cfg.speaker_threshold))
         self._model = None
 
     def _load(self):

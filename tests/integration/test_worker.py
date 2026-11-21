@@ -41,7 +41,7 @@ def test_process_once_returns_false_when_empty(cfg):
 def test_transient_error_is_requeued(cfg, monkeypatch):
     mid = _pending(cfg)
 
-    def boom(cfg_arg, meeting):
+    def boom(cfg_arg, meeting, *args, **kwargs):
         raise ProviderError("asr_timeout", "超时", transient=True)
 
     monkeypatch.setattr("app.pipeline.transcribe.run", boom)

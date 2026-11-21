@@ -31,6 +31,8 @@ def meeting_status(request: Request, uid: str):
         return {
             "status": m["status"],
             "status_label": state.STATUS_LABELS.get(m["status"], m["status"]),
+            "progress": state.progress_of(m["status"]),
+            "closed": bool(m["closed"]),
             "error_code": m["error_code"],
             "error_msg": m["error_msg"],
             "retry_count": m["retry_count"],

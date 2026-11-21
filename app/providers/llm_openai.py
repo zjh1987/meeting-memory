@@ -7,10 +7,12 @@ from app.providers.errors import ProviderError
 
 
 class OpenAiLlm:
-    def __init__(self, cfg: Config):
-        self.base_url = cfg.llm_base_url
-        self.api_key = cfg.llm_api_key
-        self.model = cfg.llm_model
+    def __init__(self, cfg: Config, settings: dict | None = None):
+        options = settings or {}
+        self.base_url = options.get("base_url", cfg.llm_base_url)
+        self.api_key = options.get("api_key", cfg.llm_api_key)
+        self.model = options.get("model", cfg.llm_model)
+        self.temperature = float(options.get("temperature", 0.1))
 
     def complete_json(self, system: str, user: str) -> dict:
         headers = {"Content-Type": "application/json"}
@@ -22,7 +24,7 @@ class OpenAiLlm:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "temperature": 0.1,
+            "temperature": self.temperature,
             "response_format": {"type": "json_object"},
         }
         try:

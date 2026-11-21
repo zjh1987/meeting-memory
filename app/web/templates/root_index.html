@@ -4,7 +4,7 @@
 <div class="card">
   <h1 style="margin-top:0">会议归档</h1>
   {% for item in days %}
-  <div style="padding:10px 0;border-top:1px solid #e5e6eb">
+  <div style="padding:14px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between">
     <a href="/site/{{ item.day.replace('-', '/') }}/index.html">{{ item.day }}</a>
     <span class="muted">{{ item.count }} 场</span>
   </div>

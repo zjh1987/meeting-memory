@@ -8,7 +8,8 @@ from app.core import state
 FIELDS = {
     "title", "project_id", "template_key", "recorded_at", "duration_sec",
     "audio_filename", "audio_size", "status", "error_code", "error_msg",
-    "retry_count", "next_retry_at", "transcript", "minutes",
+    "retry_count", "next_retry_at", "transcript", "minutes", "closed",
+    "asr_seconds", "audio_seconds",
     "started_at", "finished_at", "heartbeat_at",
 }
 
@@ -160,7 +161,7 @@ def reset_for_retry(conn, meeting_id: int) -> None:
 def previous_done(conn, project_id: int, before_id: int, limit: int = 5) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM meeting WHERE project_id=? AND id<? AND status='done'"
-        " ORDER BY id DESC LIMIT ?",
+        " AND closed=0 ORDER BY id DESC LIMIT ?",
         (project_id, before_id, limit),
     ).fetchall()
     return [dict(r) for r in rows]

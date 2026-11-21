@@ -1,22 +1,8 @@
 import json
 
 from app.core import state
+from app.services import settings as settings_service
 from app.storage import action_repo, relation_repo
-
-MINUTE_TEMPLATES = {
-    "standard": {
-        "name": "常规会议",
-        "sections": ["summary", "topics", "decisions", "actions", "open_issues"],
-    },
-    "discussion": {
-        "name": "座谈交流",
-        "sections": ["summary", "topics", "people", "decisions", "actions"],
-    },
-    "report": {
-        "name": "工作汇报",
-        "sections": ["summary", "topics", "open_issues", "actions"],
-    },
-}
 
 
 def build_context(conn, meeting: dict) -> dict:
@@ -25,8 +11,7 @@ def build_context(conn, meeting: dict) -> dict:
     project = conn.execute(
         "SELECT name FROM project WHERE id=?", (meeting["project_id"],)
     ).fetchone()
-    tmpl = MINUTE_TEMPLATES.get(meeting["template_key"],
-                                MINUTE_TEMPLATES["standard"])
+    tmpl = settings_service.get_template(conn, meeting["template_key"])
     return {
         "minutes": minutes,
         "transcript": transcript,

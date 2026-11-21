@@ -1,8 +1,18 @@
 import shutil
 import subprocess
+import wave
 from pathlib import Path
 
 from app.providers.errors import ProviderError
+
+
+def wav_duration_sec(path: Path) -> float:
+    try:
+        with wave.open(str(path)) as handle:
+            rate = handle.getframerate()
+            return handle.getnframes() / rate if rate else 0.0
+    except (wave.Error, OSError):
+        return 0.0
 
 
 def to_wav(src: Path, dst: Path) -> Path:

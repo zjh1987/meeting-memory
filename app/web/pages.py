@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from app.core import state
+from app.services import settings as settings_service
 from app.storage import db, meeting_repo, project_repo
 from app.web import context, render
 
@@ -17,10 +18,14 @@ def home(request: Request, project_id: int | None = None,
             conn, project_id=project_id, status=status,
             date=date, page=max(page, 1))
         projects = project_repo.list_all(conn)
+        templates = settings_service.list_templates(conn)
     finally:
         conn.close()
+    for item in items:
+        item["progress"] = state.progress_of(item["status"])
     return HTMLResponse(render.render(
-        "index.html", meetings=items, projects=projects, total=total,
+        "index.html", meetings=items, projects=projects, templates=templates,
+        total=total,
         page=page, filters={"project_id": project_id, "status": status, "date": date},
         labels=state.STATUS_LABELS,
     ))
@@ -38,5 +43,11 @@ def meeting_page(request: Request, uid: str):
         conn.close()
     return HTMLResponse(render.render(
         "meeting.html", m=meeting, labels=state.STATUS_LABELS,
+        progress=state.progress_of(meeting["status"]),
         standalone=False, **ctx,
     ))
+
+
+@router.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request):
+    return HTMLResponse(render.render("admin.html", standalone=False))

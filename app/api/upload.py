@@ -4,10 +4,10 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, Request, UploadFile
 
 from app.api.errors import ApiError
+from app.services import settings as settings_service
 from app.storage import db, files, meeting_repo, project_repo
 
 router = APIRouter(prefix="/api")
-TEMPLATE_KEYS = {"standard", "discussion", "report"}
 
 
 @router.post("/meetings")
@@ -25,7 +25,12 @@ def upload(
     project_name = project_name.strip()
     if not project_name:
         raise ApiError(400, "upload_invalid", "必须选择项目")
-    if template_key not in TEMPLATE_KEYS:
+    conn = db.connect(cfg.db_path)
+    try:
+        template_keys = {t["key"] for t in settings_service.list_templates(conn)}
+    finally:
+        conn.close()
+    if template_key not in template_keys:
         raise ApiError(400, "upload_invalid", "未知的纪要模板")
     if files.free_gb(cfg.data_dir) < cfg.min_free_gb:
         raise ApiError(503, "storage_full", "服务器磁盘空间不足")

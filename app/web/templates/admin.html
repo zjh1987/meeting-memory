@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+{% block title %}管理后台 · 会议记忆{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>管理后台</h1>
+    <div class="sub">模型调用、语音识别、热词、纪要模板与会议管理</div>
+  </div>
+  <a class="btn ghost small" href="/" data-tip="返回会议列表">返回列表</a>
+</div>
+
+<div class="segmented" id="tabs">
+  <button data-tab="llm" class="active" data-tip="配置大模型地址、模型名与密钥">大模型</button>
+  <button data-tab="asr" data-tip="查看本地语音模型状态与效率">语音识别</button>
+  <button data-tab="hotwords" data-tip="维护专有名词与项目名，提高识别准确率">热词</button>
+  <button data-tab="templates" data-tip="自定义纪要展示模块与提示词">纪要模板</button>
+  <button data-tab="meetings" data-tip="结案、重生成、删除与重建归档">会议管理</button>
+</div>
+
+<!-- 大模型 -->
+<div class="card tab-panel" id="panel-llm" style="margin-top:16px">
+  <h2 class="section-title">大模型调用设置</h2>
+  <p class="muted" style="margin-top:-6px">支持任何 OpenAI 兼容接口，例如 DeepSeek、vLLM、Ollama、Xinference。</p>
+  <div class="grid2">
+    <div class="field">
+      <label>提供方</label>
+      <select id="llm-provider">
+        <option value="openai">OpenAI 兼容接口</option>
+        <option value="mock">Mock（离线演示）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>模型名称</label>
+      <input id="llm-model" placeholder="例如：deepseek-chat / qwen2.5-32b-instruct">
+    </div>
+    <div class="field">
+      <label>Base URL</label>
+      <input id="llm-base-url" placeholder="例如：https://api.deepseek.com/v1">
+      <div class="hint">本地模型填写类似 http://127.0.0.1:8000/v1。</div>
+    </div>
+    <div class="field">
+      <label>Temperature</label>
+      <input id="llm-temperature" type="number" step="0.1" min="0" max="2" value="0.1">
+      <div class="hint">纪要场景建议 0.1 到 0.3。</div>
+    </div>
+  </div>
+  <div class="field">
+    <label>API Key</label>
+    <input id="llm-api-key" type="password" autocomplete="new-password"
+           placeholder="留空表示保持当前密钥不变">
+    <div class="hint" id="llm-key-hint">当前未配置密钥。</div>
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="llm-save" data-tip="保存并立即用于后续任务">保存设置</button>
+    <button class="btn ghost" id="llm-test" data-tip="发起一次真实的小请求验证连通性">测试连接</button>
+    <button class="btn ghost" id="llm-clear" data-tip="清空已保存的 API Key">清除 Key</button>
+    <span id="llm-status" class="muted"></span>
+  </div>
+</div>
+
+<!-- ASR -->
+<div class="card tab-panel hidden" id="panel-asr">
+  <h2 class="section-title">语音识别设置</h2>
+  <div class="stat-grid" style="margin-bottom:18px">
+    <div class="stat"><div class="k">GPU</div><div class="v" id="asr-gpu">-</div></div>
+    <div class="stat"><div class="k">显存</div><div class="v" id="asr-vram">-</div></div>
+    <div class="stat"><div class="k">平均实时率 RTF</div><div class="v" id="asr-rtf">-</div></div>
+    <div class="stat"><div class="k">已统计转写</div><div class="v" id="asr-count">0</div></div>
+  </div>
+  <table style="margin-bottom:18px">
+    <thead><tr><th>模型</th><th>用途</th><th>状态</th><th>体积</th><th>路径</th></tr></thead>
+    <tbody id="asr-models"></tbody>
+  </table>
+  <div class="grid2">
+    <div class="field">
+      <label>后端</label>
+      <select id="asr-backend">
+        <option value="funasr">本地 FunASR</option>
+        <option value="mock">Mock（离线演示）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>设备</label>
+      <input id="asr-device" placeholder="cuda:0 或 cpu">
+    </div>
+    <div class="field">
+      <label>模型目录</label>
+      <input id="asr-model-dir" placeholder="./models/funasr">
+    </div>
+    <div class="field">
+      <label>说话人聚类阈值</label>
+      <input id="asr-threshold" type="number" step="0.01" min="0" max="1">
+      <div class="hint">偏低倾向合并，偏高倾向拆分；默认 0.75。</div>
+    </div>
+    <div class="field">
+      <label>最长录音时长（分钟）</label>
+      <input id="asr-max-duration" type="number" min="0" step="30">
+      <div class="hint">默认 360 分钟（6 小时）；0 表示不限制，超限会在转写前失败。</div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="asr-save" data-tip="保存并用于下一场会议">保存设置</button>
+    <button class="btn ghost" id="asr-check" data-tip="检查四个本地模型文件是否齐全">检查模型文件</button>
+    <span id="asr-status" class="muted"></span>
+  </div>
+</div>
+
+<!-- 热词 -->
+<div class="card tab-panel hidden" id="panel-hotwords">
+  <h2 class="section-title">热词管理</h2>
+  <p class="muted" style="margin-top:-6px">每行一个词，可填人名、项目名、专业术语。下次转写立即生效。</p>
+  <div class="field">
+    <label>热词列表</label>
+    <textarea id="hotwords-text" placeholder="张敏&#10;数据同步&#10;三季度进度系统"></textarea>
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="hotwords-save" data-tip="写入 config/hotwords.txt">保存热词</button>
+    <span id="hotwords-status" class="muted"></span>
+  </div>
+</div>
+
+<!-- 纪要模板 -->
+<div class="card tab-panel hidden" id="panel-templates">
+  <h2 class="section-title">纪要模板</h2>
+  <p class="muted" style="margin-top:-6px">决定详情页展示哪些模块；提示词会附加到系统要求中，引导模型侧重不同内容。</p>
+  <div class="grid2">
+    <div class="field">
+      <label>模板标识（英文小写）</label>
+      <input id="tpl-key" placeholder="例如：weekly">
+    </div>
+    <div class="field">
+      <label>模板名称</label>
+      <input id="tpl-name" placeholder="例如：周会">
+    </div>
+  </div>
+  <div class="field">
+    <label>展示模块</label>
+    <div class="toolbar" id="tpl-sections">
+      <label><input type="checkbox" value="summary"> 摘要</label>
+      <label><input type="checkbox" value="topics"> 议题</label>
+      <label><input type="checkbox" value="decisions"> 决定事项</label>
+      <label><input type="checkbox" value="actions"> 待办事项</label>
+      <label><input type="checkbox" value="open_issues"> 待定事项</label>
+      <label><input type="checkbox" value="people"> 参会人员</label>
+    </div>
+  </div>
+  <div class="field">
+    <label>模板提示词</label>
+    <textarea id="tpl-hint" style="min-height:110px"
+              placeholder="例如：模板：周会。重点提炼本周进展、风险与下周计划。"></textarea>
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="tpl-save" data-tip="新建或更新模板">保存模板</button>
+    <button class="btn ghost" id="tpl-reset" data-tip="清空表单，准备新建">清空表单</button>
+    <span id="tpl-status" class="muted"></span>
+  </div>
+  <table style="margin-top:18px">
+    <thead><tr><th>标识</th><th>名称</th><th>模块</th><th>类型</th><th></th></tr></thead>
+    <tbody id="tpl-list"></tbody>
+  </table>
+</div>
+
+<!-- 会议管理 -->
+<div class="card tab-panel hidden" id="panel-meetings">
+  <h2 class="section-title">会议管理</h2>
+  <div class="notice" style="margin-bottom:16px">
+    静态归档是每场会议生成的只读 HTML 快照（含纪要、待办、逐字稿），用于分享和长期保存，
+    与业务上的“结案”不同。结案后的会议不会参与新会议的关联引用。
+  </div>
+  <div class="toolbar" style="margin-bottom:12px">
+    <button class="btn ghost" id="meetings-refresh" data-tip="重新读取会议列表">刷新列表</button>
+    <button class="btn ghost" id="archives-rebuild" data-tip="用当前样式重写全部已完成会议的归档">重建全部静态归档</button>
+    <span id="meetings-status" class="muted"></span>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>会议</th><th>项目</th><th>时间</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody id="meetings-list"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, c => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+}[c]));
+
+async function api(path, options = {}) {
+  const resp = await fetch(path, {
+    headers: {"Content-Type": "application/json"}, ...options
+  });
+  let data = {};
+  try { data = await resp.json(); } catch (_) {}
+  if (!resp.ok) {
+    const message = (data.error && data.error.message) || ("请求失败 " + resp.status);
+    throw new Error(message);
+  }
+  return data;
+}
+
+const tabs = $("tabs");
+tabs.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-tab]");
+  if (!button) return;
+  tabs.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+  button.classList.add("active");
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
+  $("panel-" + button.dataset.tab).classList.remove("hidden");
+});
+
+function setStatus(id, text, isError = false) {
+  const node = $(id);
+  node.textContent = text;
+  node.className = isError ? "error" : "ok";
+}
+
+async function loadSettings() {
+  const data = await api("/api/admin/settings");
+  const llm = data.llm;
+  $("llm-provider").value = llm.provider;
+  $("llm-model").value = llm.model || "";
+  $("llm-base-url").value = llm.base_url || "";
+  $("llm-temperature").value = llm.temperature ?? 0.1;
+  $("llm-api-key").value = "";
+  $("llm-key-hint").textContent = llm.has_key
+    ? "当前密钥：" + llm.masked_key + "（留空保持不变）"
+    : "当前未配置密钥。";
+
+  const asr = data.asr;
+  $("asr-backend").value = asr.backend;
+  $("asr-device").value = asr.device;
+  $("asr-model-dir").value = asr.model_dir;
+  $("asr-threshold").value = asr.speaker_threshold;
+  $("asr-max-duration").value = asr.max_duration_min;
+  $("asr-gpu").textContent = asr.gpu.name;
+  $("asr-vram").textContent = asr.gpu.memory_mb ? Math.round(asr.gpu.memory_mb / 1024) + " GB" : "-";
+  $("asr-rtf").textContent = asr.metrics.avg_rtf || "-";
+  $("asr-count").textContent = asr.metrics.count;
+  $("asr-models").innerHTML = asr.models.map(m => `
+    <tr>
+      <td><strong>${esc(m.label)}</strong></td>
+      <td class="muted">${esc(m.key)}</td>
+      <td><span class="chip ${m.ready ? "done" : "failed"}">${m.ready ? "就绪" : "缺失"}</span></td>
+      <td>${m.size_mb} MB</td>
+      <td class="muted" style="word-break:break-all">${esc(m.path)}</td>
+    </tr>`).join("");
+
+  $("hotwords-text").value = data.hotwords.join("\n");
+  renderTemplates(data.templates);
+}
+
+$("llm-save").addEventListener("click", async () => {
+  try {
+    await api("/api/admin/llm", {method: "POST", body: JSON.stringify({
+      provider: $("llm-provider").value,
+      model: $("llm-model").value.trim(),
+      base_url: $("llm-base-url").value.trim(),
+      temperature: Number($("llm-temperature").value),
+      api_key: $("llm-api-key").value
+    })});
+    setStatus("llm-status", "已保存，后续任务立即生效");
+    await loadSettings();
+  } catch (err) { setStatus("llm-status", err.message, true); }
+});
+
+$("llm-test").addEventListener("click", async () => {
+  setStatus("llm-status", "正在测试…");
+  try {
+    const result = await api("/api/admin/test-llm", {method: "POST"});
+    setStatus("llm-status", result.ok
+      ? `连接成功，模型 ${result.model}，耗时 ${result.latency_ms} ms`
+      : "连接失败：" + result.error, !result.ok);
+  } catch (err) { setStatus("llm-status", err.message, true); }
+});
+
+$("llm-clear").addEventListener("click", async () => {
+  if (!confirm("确定清除已保存的 API Key？")) return;
+  try {
+    const data = await api("/api/admin/llm", {method: "POST", body: JSON.stringify({
+      provider: $("llm-provider").value,
+      model: $("llm-model").value.trim(),
+      base_url: $("llm-base-url").value.trim(),
+      temperature: Number($("llm-temperature").value),
+      clear_key: true
+    })});
+    setStatus("llm-status", "已清除 API Key");
+    await loadSettings();
+  } catch (err) { setStatus("llm-status", err.message, true); }
+});
+
+$("asr-save").addEventListener("click", async () => {
+  try {
+    await api("/api/admin/asr", {method: "POST", body: JSON.stringify({
+      backend: $("asr-backend").value,
+      device: $("asr-device").value.trim(),
+      model_dir: $("asr-model-dir").value.trim(),
+      speaker_threshold: Number($("asr-threshold").value),
+      max_duration_min: Number($("asr-max-duration").value)
+    })});
+    setStatus("asr-status", "已保存，下一场会议生效");
+    await loadSettings();
+  } catch (err) { setStatus("asr-status", err.message, true); }
+});
+
+$("asr-check").addEventListener("click", async () => {
+  setStatus("asr-status", "正在检查…");
+  try {
+    const result = await api("/api/admin/asr/check", {method: "POST"});
+    setStatus("asr-status", result.message, !result.ok);
+  } catch (err) { setStatus("asr-status", err.message, true); }
+});
+
+$("hotwords-save").addEventListener("click", async () => {
+  try {
+    const data = await api("/api/admin/hotwords", {method: "PUT", body: JSON.stringify({
+      items: $("hotwords-text").value.split("\n")
+    })});
+    setStatus("hotwords-status", `已保存 ${data.count} 个热词，下次转写生效`);
+  } catch (err) { setStatus("hotwords-status", err.message, true); }
+});
+
+let templatesCache = [];
+function renderTemplates(items) {
+  templatesCache = items;
+  $("tpl-list").innerHTML = items.map(t => `
+    <tr>
+      <td class="muted">${esc(t.key)}</td>
+      <td><strong>${esc(t.name)}</strong></td>
+      <td class="muted">${t.sections.map(s => esc(s)).join(" / ")}</td>
+      <td>${t.builtin ? "内置" : "自定义"}</td>
+      <td style="text-align:right">
+        <button class="btn ghost small" data-edit="${esc(t.key)}">编辑</button>
+        ${t.builtin ? "" : `<button class="btn danger small" data-delete="${esc(t.key)}">删除</button>`}
+      </td>
+    </tr>`).join("");
+}
+$("tpl-list").addEventListener("click", async (event) => {
+  const edit = event.target.closest("button[data-edit]");
+  const del = event.target.closest("button[data-delete]");
+  if (edit) {
+    const tpl = templatesCache.find(t => t.key === edit.dataset.edit);
+    $("tpl-key").value = tpl.key;
+    $("tpl-name").value = tpl.name;
+    $("tpl-hint").value = tpl.hint;
+    document.querySelectorAll("#tpl-sections input").forEach(box => {
+      box.checked = tpl.sections.includes(box.value);
+    });
+    window.scrollTo({top: 0, behavior: "smooth"});
+  }
+  if (del) {
+    if (!confirm("确定删除模板 " + del.dataset.delete + "？")) return;
+    try {
+      await api("/api/admin/templates/" + encodeURIComponent(del.dataset.delete),
+                {method: "DELETE"});
+      await loadSettings();
+      setStatus("tpl-status", "已删除");
+    } catch (err) { setStatus("tpl-status", err.message, true); }
+  }
+});
+$("tpl-save").addEventListener("click", async () => {
+  const sections = Array.from(document.querySelectorAll("#tpl-sections input:checked"))
+    .map(box => box.value);
+  try {
+    await api("/api/admin/templates", {method: "POST", body: JSON.stringify({
+      key: $("tpl-key").value.trim(),
+      name: $("tpl-name").value.trim(),
+      sections, hint: $("tpl-hint").value.trim()
+    })});
+    setStatus("tpl-status", "已保存");
+    await loadSettings();
+  } catch (err) { setStatus("tpl-status", err.message, true); }
+});
+$("tpl-reset").addEventListener("click", () => {
+  ["tpl-key", "tpl-name", "tpl-hint"].forEach(id => $(id).value = "");
+  document.querySelectorAll("#tpl-sections input").forEach(box => box.checked = false);
+});
+
+async function loadMeetings() {
+  const data = await api("/api/meetings?size=100");
+  $("meetings-list").innerHTML = data.items.map(m => `
+    <tr>
+      <td><a href="/m/${esc(m.uid)}"><strong>${esc(m.title)}</strong></a>
+          ${m.closed ? '<span class="chip closed">已结案</span>' : ""}</td>
+      <td class="muted">${esc(m.project_name)}</td>
+      <td class="muted">${esc(m.recorded_at)}</td>
+      <td><span class="chip ${m.status === "done" ? "done" : m.status === "failed" ? "failed" : "processing"}">${esc(m.status)}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn ghost small" data-regen="${esc(m.uid)}">重生成</button>
+        <button class="btn ghost small" data-close="${esc(m.uid)}" data-closed="${m.closed ? 1 : 0}">${m.closed ? "取消结案" : "结案"}</button>
+        <button class="btn danger small" data-remove="${esc(m.uid)}">删除</button>
+      </td>
+    </tr>`).join("") || '<tr><td colspan="5" class="muted">暂无会议</td></tr>';
+}
+$("meetings-list").addEventListener("click", async (event) => {
+  const regen = event.target.closest("button[data-regen]");
+  const close = event.target.closest("button[data-close]");
+  const remove = event.target.closest("button[data-remove]");
+  try {
+    if (regen) {
+      await api(`/api/admin/meetings/${regen.dataset.regen}/regenerate`, {method: "POST"});
+      setStatus("meetings-status", "已重新排队生成纪要");
+      await loadMeetings();
+    }
+    if (close) {
+      await api(`/api/admin/meetings/${close.dataset.close}/close`, {
+        method: "POST",
+        body: JSON.stringify({closed: close.dataset.closed !== "1"})
+      });
+      await loadMeetings();
+    }
+    if (remove) {
+      if (!confirm("将永久删除会议、音频与静态归档，确定继续？")) return;
+      await api(`/api/admin/meetings/${remove.dataset.remove}`, {method: "DELETE"});
+      setStatus("meetings-status", "已删除");
+      await loadMeetings();
+    }
+  } catch (err) { setStatus("meetings-status", err.message, true); }
+});
+$("meetings-refresh").addEventListener("click", () => loadMeetings());
+$("archives-rebuild").addEventListener("click", async () => {
+  setStatus("meetings-status", "正在重建…");
+  try {
+    const data = await api("/api/admin/rebuild-archives", {method: "POST"});
+    setStatus("meetings-status", `已重建 ${data.count} 场静态归档`);
+  } catch (err) { setStatus("meetings-status", err.message, true); }
+});
+
+loadSettings().catch(err => setStatus("llm-status", err.message, true));
+loadMeetings().catch(() => {});
+</script>
+{% endblock %}

@@ -1,17 +1,21 @@
 {% extends "base.html" %}
 {% block title %}登录 · 会议记忆{% endblock %}
 {% block content %}
-<div class="card" style="max-width:380px;margin:80px auto">
-  <h2 style="margin-top:0">会议记忆</h2>
-  <p class="muted">录音自动转写 · 结构化纪要 · 跨会议关联</p>
-  {% if error %}<div class="error">{{ error }}</div>{% endif %}
-  <form method="post" action="/login">
-    <div class="field">
-      <label for="password">访问口令</label>
-      <input id="password" name="password" type="password" autofocus required>
-    </div>
-    <button class="btn" type="submit">进入</button>
-  </form>
-  <p class="muted" style="margin-bottom:0">使用前请确认已告知参会人录音用途。</p>
+<div class="login-wrap">
+  <div class="card login-card">
+    <h1>会议记忆</h1>
+    <p class="muted">录音自动转写 · 结构化纪要 · 跨会议关联</p>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <form method="post" action="/login">
+      <div class="field">
+        <label for="password">访问口令</label>
+        <input id="password" name="password" type="password" autofocus required
+               placeholder="请输入访问口令">
+      </div>
+      <button class="btn" type="submit" style="width:100%"
+              data-tip="进入会议记忆">进入</button>
+    </form>
+    <p class="muted" style="margin-bottom:0">使用前请确认已告知参会人录音用途。</p>
+  </div>
 </div>
 {% endblock %}

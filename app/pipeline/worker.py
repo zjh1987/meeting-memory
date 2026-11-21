@@ -3,6 +3,7 @@
 import json
 import shutil
 import threading
+import time
 import traceback
 from datetime import datetime, timedelta
 
@@ -12,6 +13,7 @@ from app.core.logging import log_event
 from app.pipeline import archive, minutes as minutes_pipeline, relations, transcribe
 from app.pipeline.minutes import MinutesValidationError
 from app.providers.errors import ProviderError
+from app.services import settings as settings_service
 from app.storage import action_repo, db, meeting_repo, relation_repo
 from app.web import context, render
 
@@ -23,7 +25,8 @@ def _finalize(cfg: Config, conn, meeting: dict) -> None:
     fresh = meeting_repo.get_by_id(conn, meeting["id"])
     ctx = context.build_context(conn, fresh)
     html = render.render("meeting.html", m=fresh, standalone=True,
-                         labels=state.STATUS_LABELS, **ctx)
+                         labels=state.STATUS_LABELS,
+                         progress=state.progress_of(fresh["status"]), **ctx)
     archive.write_meeting(cfg, fresh, html)
     archive.refresh_indices(cfg)
 
@@ -52,13 +55,22 @@ def _process(cfg: Config, conn, meeting: dict) -> None:
     stage = state.resume_stage(meeting["transcript"], meeting["minutes"])
     log_event("info", "stage", uid=meeting["uid"], stage=stage)
     segments = json.loads(meeting["transcript"]) if meeting["transcript"] else None
+    llm_options = settings_service.llm_settings(cfg, conn)
+    asr_options = settings_service.asr_settings(cfg, conn)
+    template = settings_service.get_template(conn, meeting["template_key"])
 
     if stage == "transcribe":
-        segments = transcribe.run(cfg, meeting)
+        started = time.perf_counter()
+        segments = transcribe.run(cfg, meeting, asr_options,
+                                  asr_options["max_duration_min"])
+        asr_seconds = round(time.perf_counter() - started, 2)
+        audio_seconds = float(segments[-1]["end"]) if segments else 0.0
         meeting_repo.update_fields(
             conn, meeting["id"],
             transcript=json.dumps(segments, ensure_ascii=False),
-            duration_sec=int(segments[-1]["end"]) if segments else 0,
+            duration_sec=int(audio_seconds),
+            asr_seconds=asr_seconds,
+            audio_seconds=audio_seconds,
         )
         meeting_repo.set_status(conn, meeting["id"], "minuting")
     elif stage == "minutes":
@@ -66,8 +78,9 @@ def _process(cfg: Config, conn, meeting: dict) -> None:
 
     if stage in {"transcribe", "minutes"}:
         try:
-            data = minutes_pipeline.generate(cfg, segments or [],
-                                             meeting["template_key"])
+            data = minutes_pipeline.generate(
+                cfg, segments or [], meeting["template_key"],
+                llm_settings=llm_options, hint=template["hint"])
         except MinutesValidationError as exc:
             _minutes_failed(conn, meeting, "llm_bad_json", str(exc))
             _finalize(cfg, conn, meeting)

@@ -46,6 +46,31 @@ def write_meeting(cfg: Config, meeting: dict, html: str) -> Path:
     return target
 
 
+def rebuild_all(cfg: Config) -> int:
+    """用当前模板重写全部已完成会议的静态归档，并刷新索引。"""
+    from app.core import state
+    from app.web import context
+    conn = db.connect(cfg.db_path)
+    count = 0
+    try:
+        rows = conn.execute(
+            "SELECT * FROM meeting WHERE status='done' ORDER BY recorded_at"
+        ).fetchall()
+        for row in rows:
+            meeting = dict(row)
+            ctx = context.build_context(conn, meeting)
+            html = render.render("meeting.html", m=meeting, standalone=True,
+                                 labels=state.STATUS_LABELS,
+                                 progress=state.progress_of(meeting["status"]),
+                                 **ctx)
+            write_meeting(cfg, meeting, html)
+            count += 1
+    finally:
+        conn.close()
+    refresh_indices(cfg)
+    return count
+
+
 def refresh_indices(cfg: Config) -> None:
     conn = db.connect(cfg.db_path)
     try:

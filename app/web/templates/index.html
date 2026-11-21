@@ -1,124 +1,185 @@
 {% extends "base.html" %}
 {% block title %}会议列表 · 会议记忆{% endblock %}
 {% block content %}
-<div class="card" style="margin-bottom:16px">
-  <details>
-    <summary style="cursor:pointer;font-weight:600">上传会议录音</summary>
-    <form id="upload-form" style="margin-top:16px">
-      <div class="field">
-        <label>音频文件</label>
+<div class="page-head">
+  <div>
+    <h1>会议列表</h1>
+    <div class="sub">共 {{ total }} 场会议 · 上传后自动转写、生成纪要与关联</div>
+  </div>
+  <a class="btn ghost small" href="/admin" data-tip="模型、热词、模板与会议管理">进入管理后台</a>
+</div>
+
+<div class="card">
+  <h2 class="section-title">上传会议录音</h2>
+  <form id="upload-form">
+    <div class="upload-box" id="drop-zone">
+      <div class="field" style="margin-bottom:12px">
+        <label>音频文件（m4a / mp3 / wav / opus / aac / amr / flac）</label>
         <input type="file" name="file" required
                accept=".m4a,.mp3,.wav,.opus,.aac,.amr,.flac">
       </div>
+      <div class="muted">可以把文件直接拖到这里。上传完成后自动进入转写队列。</div>
+    </div>
+    <div class="grid2" style="margin-top:16px">
       <div class="field">
         <label>会议标题（缺省取文件名）</label>
         <input name="title" placeholder="例如：三季度进度会">
+      </div>
+      <div class="field">
+        <label>纪要模板</label>
+        <select name="template_key">
+          {% for t in templates %}
+          <option value="{{ t.key }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="hint">模板可在管理后台自定义展示模块与提示词。</div>
       </div>
       <div class="field">
         <label>项目</label>
         <select name="project_name" required>
           {% for p in projects %}<option value="{{ p.name }}">{{ p.name }}</option>{% endfor %}
         </select>
-        <input name="new_project" placeholder="或输入新项目名（优先于下拉）"
-               style="margin-top:8px">
       </div>
       <div class="field">
-        <label>纪要模板</label>
-        <select name="template_key">
-          <option value="standard">常规会议</option>
-          <option value="discussion">座谈交流</option>
-          <option value="report">工作汇报</option>
-        </select>
+        <label>或新建项目</label>
+        <input name="new_project" placeholder="输入后优先于左侧下拉框">
       </div>
-      <progress id="upload-progress" value="0" max="100"
-                style="width:100%;display:none"></progress>
-      <button class="btn" type="submit">开始上传</button>
-      <span id="upload-error" class="error"></span>
-    </form>
-  </details>
+    </div>
+    <div class="toolbar">
+      <button class="btn" type="submit" data-tip="上传并开始处理">开始上传</button>
+      <span class="muted" id="upload-percent"></span>
+      <span id="upload-error" class="error" style="margin:0"></span>
+    </div>
+    <div class="progress" style="margin-top:12px;display:none" id="upload-progress-wrap">
+      <i id="upload-progress"></i>
+    </div>
+  </form>
 </div>
 
-<form method="get" class="card" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">
-  <div class="field" style="margin:0">
-    <label>项目</label>
-    <select name="project_id">
-      <option value="">全部</option>
-      {% for p in projects %}
-      <option value="{{ p.id }}" {% if filters.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
-      {% endfor %}
-    </select>
+<form method="get" class="card" style="margin-top:16px">
+  <div class="toolbar">
+    <div class="field" style="margin:0;min-width:160px">
+      <label>项目</label>
+      <select name="project_id">
+        <option value="">全部项目</option>
+        {% for p in projects %}
+        <option value="{{ p.id }}" {% if filters.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field" style="margin:0;min-width:140px">
+      <label>状态</label>
+      <select name="status">
+        <option value="">全部状态</option>
+        {% for key, label in labels.items() %}
+        <option value="{{ key }}" {% if filters.status == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field" style="margin:0;min-width:150px">
+      <label>日期</label>
+      <input type="date" name="date" value="{{ filters.date or '' }}">
+    </div>
+    <button class="btn ghost" type="submit" data-tip="按条件筛选会议">筛选</button>
+    <a class="btn ghost" href="/">重置</a>
   </div>
-  <div class="field" style="margin:0">
-    <label>状态</label>
-    <select name="status">
-      <option value="">全部</option>
-      {% for key, label in labels.items() %}
-      <option value="{{ key }}" {% if filters.status == key %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="field" style="margin:0">
-    <label>日期</label>
-    <input type="date" name="date" value="{{ filters.date or '' }}">
-  </div>
-  <button class="btn" type="submit">筛选</button>
 </form>
 
-{% for m in meetings %}
-<div class="card" style="margin-top:12px" data-status-url="/api/meetings/{{ m.uid }}/status">
-  <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
-    <div>
-      <a href="/m/{{ m.uid }}"><strong>{{ m.title }}</strong></a>
-      <div class="muted">{{ m.project_name }} · {{ m.recorded_at }} · {{ m.duration_sec|mmss }}</div>
+<div class="card" style="margin-top:16px">
+  {% for m in meetings %}
+  <div class="meeting-row" data-status-url="/api/meetings/{{ m.uid }}/status">
+    <div style="min-width:0">
+      <a class="title" href="/m/{{ m.uid }}" data-tip="打开会议详情">
+        {{ m.title }}{% if m.closed %} <span class="chip closed">已结案</span>{% endif %}
+      </a>
+      <div class="meta">{{ m.project_name }} · {{ m.recorded_at }} · {{ m.duration_sec|mmss }}
+        · 待办 {{ m.open_actions }}</div>
     </div>
-    <div>
-      <span class="chip {% if m.status == 'done' %}done{% elif m.status == 'failed' %}failed{% else %}processing{% endif %}">
+    <div class="side">
+      <span class="chip {% if m.status == 'done' %}done{% elif m.status == 'failed' %}failed{% else %}processing{% endif %}"
+            data-tip="{{ m.error_msg or '当前处理状态' }}">
         {{ labels.get(m.status, m.status) }}
       </span>
-      <span class="muted">待办 {{ m.open_actions }}</span>
+      <span class="muted" style="margin-left:6px">{{ m.progress }}%</span>
+      {% if m.status not in ('done', 'failed') %}
+      <div class="progress stage" data-tip="按阶段估算的处理进度">
+        <i style="width:{{ m.progress }}%"></i>
+      </div>
+      {% endif %}
     </div>
   </div>
+  {% else %}
+  <p class="muted" style="margin:0">暂无会议，先上传一段录音试试。</p>
+  {% endfor %}
 </div>
-{% else %}
-<div class="card" style="margin-top:12px"><p class="muted">暂无会议。</p></div>
-{% endfor %}
 
-<p class="muted" style="margin-top:20px">
-  共 {{ total }} 场 · <a href="/site/index.html" target="_blank">静态归档</a>
-</p>
+{% set total_pages = ((total + 19) // 20) %}
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if page > 1 %}
+  <a href="?page={{ page - 1 }}{% if filters.project_id %}&project_id={{ filters.project_id }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date %}&date={{ filters.date }}{% endif %}">上一页</a>
+  {% endif %}
+  <span>{{ page }} / {{ total_pages }}</span>
+  {% if page < total_pages %}
+  <a href="?page={{ page + 1 }}{% if filters.project_id %}&project_id={{ filters.project_id }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date %}&date={{ filters.date }}{% endif %}">下一页</a>
+  {% endif %}
+</div>
+{% endif %}
 
 <script>
 const form = document.getElementById("upload-form");
+const drop = document.getElementById("drop-zone");
+if (drop) {
+  ["dragenter", "dragover"].forEach(name => drop.addEventListener(name, e => {
+    e.preventDefault(); drop.classList.add("drag");
+  }));
+  ["dragleave", "drop"].forEach(name => drop.addEventListener(name, e => {
+    e.preventDefault(); drop.classList.remove("drag");
+  }));
+  drop.addEventListener("drop", e => {
+    const input = form.querySelector('input[type="file"]');
+    if (e.dataTransfer.files.length) input.files = e.dataTransfer.files;
+  });
+}
 if (form) {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(form);
     const newProject = (data.get("new_project") || "").trim();
     if (newProject) data.set("project_name", newProject);
+    const wrap = document.getElementById("upload-progress-wrap");
     const bar = document.getElementById("upload-progress");
+    const percent = document.getElementById("upload-percent");
     const err = document.getElementById("upload-error");
-    bar.style.display = "block";
+    wrap.style.display = "block";
+    bar.style.width = "0%";
+    percent.textContent = "0%";
     err.textContent = "";
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/meetings");
-    xhr.upload.onprogress = (e) => { if (e.lengthComputable) bar.value = e.loaded / e.total * 100; };
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const value = Math.round(e.loaded / e.total * 100);
+      bar.style.width = value + "%";
+      percent.textContent = value + "%";
+    };
     xhr.onload = () => {
       if (xhr.status === 200) {
+        percent.textContent = "上传完成，进入处理队列";
         location.href = "/m/" + JSON.parse(xhr.responseText).uid;
       } else {
         try { err.textContent = JSON.parse(xhr.responseText).error.message; }
         catch (_) { err.textContent = "上传失败"; }
+        percent.textContent = "";
       }
     };
-    xhr.onerror = () => { err.textContent = "网络错误"; };
+    xhr.onerror = () => { err.textContent = "网络错误"; percent.textContent = ""; };
     xhr.send(data);
   });
 }
 
-const rows = Array.from(document.querySelectorAll("[data-status-url]"));
-const active = rows.filter(r => !r.querySelector(".chip.done") && !r.querySelector(".chip.failed"));
-if (active.length) {
-  setTimeout(() => location.reload(), 3000);
-}
+const active = Array.from(document.querySelectorAll("[data-status-url]"))
+  .some(r => r.querySelector(".chip.processing"));
+if (active) setTimeout(() => location.reload(), 3000);
 </script>
 {% endblock %}

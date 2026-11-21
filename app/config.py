@@ -37,6 +37,7 @@ class Config:
     auto_retry_max: int
     retry_backoff_sec: int
     speaker_threshold: float
+    max_duration_min: int
     log_dir: Path
 
     @property
@@ -74,7 +75,7 @@ class Config:
             llm_base_url=os.getenv("LLM_BASE_URL", "").rstrip("/"),
             llm_api_key=os.getenv("LLM_API_KEY", ""),
             llm_model=os.getenv("LLM_MODEL", ""),
-            max_upload_mb=_int("MAX_UPLOAD_MB", 500),
+            max_upload_mb=_int("MAX_UPLOAD_MB", 1024),
             min_free_gb=_int("MIN_FREE_GB", 5),
             scan_interval=_int("SCAN_INTERVAL", 3),
             heartbeat_interval=_int("HEARTBEAT_INTERVAL", 60),
@@ -82,6 +83,7 @@ class Config:
             auto_retry_max=_int("AUTO_RETRY_MAX", 1),
             retry_backoff_sec=_int("RETRY_BACKOFF_SEC", 30),
             speaker_threshold=_float("SPEAKER_THRESHOLD", 0.75),
+            max_duration_min=_int("MAX_DURATION_MIN", 360),
             log_dir=Path(os.getenv("LOG_DIR", "./logs")).resolve(),
         )
 
@@ -104,4 +106,6 @@ class Config:
             problems.append("LLM_BASE_URL 与 LLM_MODEL 必须设置")
         if self.max_upload_mb <= 0:
             problems.append("MAX_UPLOAD_MB 必须大于 0")
+        if self.max_duration_min < 0:
+            problems.append("MAX_DURATION_MIN 不能为负数")
         return problems

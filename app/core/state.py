@@ -12,6 +12,21 @@ STATUS_LABELS = {
 
 PROCESSING = ("transcribing", "minuting", "relating")
 
+# 阶段进度：转写与纪要无法拿到内部百分比，按阶段估算给用户稳定反馈。
+PROGRESS = {
+    "uploading": 5,
+    "pending": 12,
+    "transcribing": 40,
+    "minuting": 80,
+    "relating": 94,
+    "done": 100,
+    "failed": 100,
+}
+
+
+def progress_of(status: str) -> int:
+    return PROGRESS.get(status, 0)
+
 _ALLOWED = {
     ("uploading", "pending"),
     ("uploading", "failed"),

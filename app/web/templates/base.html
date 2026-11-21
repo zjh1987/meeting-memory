@@ -11,12 +11,16 @@
 <div class="topbar">
   <div class="wrap">
     <a class="brand" href="/">会议记忆</a>
-    <div>
-      <a href="/">会议列表</a>
-      <form method="post" action="/logout" style="display:inline;margin-left:16px">
-        <button class="btn ghost" type="submit">退出</button>
+    <nav class="nav">
+      <a href="/" data-tip="查看全部会议与上传录音">会议列表</a>
+      <a href="/admin" data-tip="配置模型、热词、模板与会议管理">管理后台</a>
+      <a href="/site/index.html" target="_blank"
+         data-tip="只读 HTML 归档，可分享或长期保存">静态归档</a>
+      <form method="post" action="/logout" style="display:inline">
+        <button class="btn ghost small" type="submit"
+                data-tip="清除登录状态">退出</button>
       </form>
-    </div>
+    </nav>
   </div>
 </div>
 {% endif %}

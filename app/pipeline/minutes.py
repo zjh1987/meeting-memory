@@ -117,9 +117,9 @@ def merge_parts(parts: list[dict]) -> dict:
     return merged
 
 
-def _request_valid(provider, segments: list[dict], template_key: str,
+def _request_valid(provider, segments: list[dict], hint: str,
                    total_count: int) -> dict:
-    user = build_user_prompt(segments) + TEMPLATE_HINTS.get(template_key, "")
+    user = build_user_prompt(segments) + (hint or "")
     last_error = None
     for _ in range(2):
         data = provider.complete_json(SYSTEM_PROMPT, user)
@@ -131,11 +131,14 @@ def _request_valid(provider, segments: list[dict], template_key: str,
     raise last_error
 
 
-def generate(cfg: Config, segments: list[dict], template_key: str = "standard") -> dict:
-    provider = build_llm(cfg)
+def generate(cfg: Config, segments: list[dict], template_key: str = "standard",
+             llm_settings: dict | None = None,
+             hint: str | None = None) -> dict:
+    provider = build_llm(cfg, llm_settings)
+    hint_text = TEMPLATE_HINTS.get(template_key, "") if hint is None else hint
     total_chars = sum(len(s["text"]) for s in segments)
     chunks = [segments] if total_chars <= CHUNK_THRESHOLD else chunk_segments(segments)
-    parts = [_request_valid(provider, chunk, template_key, len(segments))
+    parts = [_request_valid(provider, chunk, hint_text, len(segments))
              for chunk in chunks]
     data = parts[0] if len(parts) == 1 else merge_parts(parts)
     return validate_minutes(data, len(segments))

@@ -18,5 +18,5 @@ def test_init_db_is_idempotent(cfg):
     db.init_db(cfg.db_path, db.MIGRATIONS_DIR)
     conn = db.connect(cfg.db_path)
     row = conn.execute("SELECT COUNT(*) AS n FROM schema_version").fetchone()
-    assert row["n"] == 1
+    assert row["n"] == len(list(db.MIGRATIONS_DIR.glob("*.sql")))
     conn.close()
