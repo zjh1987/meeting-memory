@@ -19,7 +19,7 @@ def _seed(cfg):
 def _client(cfg):
     client = TestClient(create_app(cfg, start_threads=False))
     client.__enter__()
-    client.post("/login", data={"password": "test-pass"})
+    client.post("/login", data={"username": "admin", "password": "test-pass"})
     return client
 
 
@@ -27,7 +27,7 @@ def test_index_lists_meeting(cfg):
     _seed(cfg)
     client = _client(cfg)
     try:
-        html = client.get("/").text
+        html = client.get("/meetings").text
         assert "三季度进度会" in html
         assert "项目A" in html
         assert "排队中" in html

@@ -78,9 +78,17 @@ def _process(cfg: Config, conn, meeting: dict) -> None:
 
     if stage in {"transcribe", "minutes"}:
         try:
+            glossary = []
+            try:
+                glossary = [w.strip() for w in cfg.hotword_file.read_text(
+                    encoding="utf-8").splitlines() if w.strip()][:50]
+            except OSError:
+                pass
             data = minutes_pipeline.generate(
                 cfg, segments or [], meeting["template_key"],
-                llm_settings=llm_options, hint=template["hint"])
+                llm_settings=llm_options, hint=template["hint"],
+                custom_sections=template.get("custom_sections") or [],
+                glossary=glossary)
         except MinutesValidationError as exc:
             _minutes_failed(conn, meeting, "llm_bad_json", str(exc))
             _finalize(cfg, conn, meeting)

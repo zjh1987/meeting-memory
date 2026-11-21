@@ -10,15 +10,26 @@ CHUNK_THRESHOLD = 24000
 CHUNK_SIZE = 8000
 CHUNK_OVERLAP = 300
 
-SYSTEM_PROMPT = """你是会议纪要助手。只依据给定的逐字稿整理，不得补充逐字稿中没有的事实。
-输出严格 JSON，顶层字段固定为：
-summary(string)、topics(list)、decisions(list)、actions(list)、open_issues(list)、people(list)。
+SYSTEM_PROMPT = """你是资深会议秘书，服务于企事业单位管理层。你的任务是把逐字稿整理成
+可执行、可追溯、无虚构的会议纪要。
+
+必须遵守：
+1. 只使用逐字稿中的信息，不得补充常识、猜测或外部知识。
+2. decisions/actions/open_issues 每一条都必须给出逐字稿原文 quote 和对应 segment_ids；
+   quote 必须是连续原文片段，不得改写。
+3. 待办尽量补齐负责人和截止时间；原文没有就写“待指定”“待定”，不得编造。
+4. 合并重复表述，保留关键数字、日期、人名与结论，删除寒暄和口头语。
+5. 区分事实、观点与决定，不要把个人判断写成会议结论。
+6. 输出严格 JSON，顶层字段固定为：
+summary(string)、topics(list)、decisions(list)、actions(list)、open_issues(list)、
+people(list)、custom_sections(list)。
 topics 每条：{"title": str, "points": [str], "segment_ids": [int]}。
 decisions 每条：{"text": str, "quote": str, "segment_ids": [int]}。
 actions 每条：{"owner": str, "task": str, "due": str, "quote": str, "segment_ids": [int]}。
 open_issues 每条：{"text": str, "reason": str, "quote": str, "segment_ids": [int]}。
-所有 decisions/actions/open_issues 必须给出逐字稿原文 quote 与对应 segment_ids；
-无法确定的信息写“待定”或“待指定”，不得编造。只输出 JSON，不要解释。"""
+custom_sections 每条：{"key": str, "title": str, "items": [{"text": str, "quote": str,
+"segment_ids": [int]}]}；没有要求时可输出空数组。
+只输出 JSON，不要解释。"""
 
 TEMPLATE_HINTS = {
     "standard": "\n模板：常规会议，均衡输出全部字段。",
@@ -36,10 +47,23 @@ def _timestamp(seconds) -> str:
     return f"{total // 3600:02d}:{total % 3600 // 60:02d}:{total % 60:02d}"
 
 
-def build_user_prompt(segments: list[dict]) -> str:
+def build_user_prompt(segments: list[dict], glossary: list[str] | None = None,
+                      custom_sections: list[dict] | None = None) -> str:
     lines = [f"[#{s['idx']}] {_timestamp(s['start'])} {s['speaker']} {s['text']}"
              for s in segments]
-    return "以下是会议逐字稿，请生成纪要：\n" + "\n".join(lines)
+    text = "以下是会议逐字稿，请生成纪要：\n" + "\n".join(lines)
+    if glossary:
+        words = "、".join(glossary[:50])
+        text += f"\n\n专有名词参考（仅用于纠正识别错误，不得据此编造内容）：{words}"
+    if custom_sections:
+        spec = [{"key": s["key"], "title": s["title"],
+                 "instruction": s.get("instruction", "")}
+                for s in custom_sections]
+        text += ("\n\n除固定字段外，请在 custom_sections 中按以下模块输出："
+                 + json.dumps(spec, ensure_ascii=False)
+                 + "。每个模块的 items 需给出 text 与 quote、segment_ids；"
+                   "确实没有原文可引用时 quote 留空、segment_ids 为空数组。")
+    return text
 
 
 def validate_minutes(data: dict, segment_count: int) -> dict:
@@ -70,7 +94,38 @@ def validate_minutes(data: dict, segment_count: int) -> dict:
         if not str(decision.get("text") or "").strip():
             raise MinutesValidationError("decisions 存在空 text")
     data.setdefault("people", [])
-    return {key: data[key] for key in REQUIRED_KEYS}
+
+    custom_sections = data.get("custom_sections") or []
+    if not isinstance(custom_sections, list):
+        raise MinutesValidationError("custom_sections 不是数组")
+    cleaned_sections = []
+    for section in custom_sections:
+        if not isinstance(section, dict):
+            raise MinutesValidationError("custom_sections 项不是对象")
+        key = str(section.get("key") or "").strip()
+        title = str(section.get("title") or key).strip()
+        items = []
+        for item in section.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("text") or "").strip()
+            if not text:
+                continue
+            ids = item.get("segment_ids") or []
+            if ids and not all(isinstance(i, int) and 0 <= i < segment_count
+                               for i in ids):
+                raise MinutesValidationError(
+                    f"custom_sections 的 segment_ids 非法：{title}")
+            items.append({"text": text,
+                          "quote": str(item.get("quote") or "").strip(),
+                          "segment_ids": ids})
+        if title and items:
+            cleaned_sections.append({"key": key or f"section_{len(cleaned_sections)}",
+                                     "title": title, "items": items})
+
+    result = {key: data[key] for key in REQUIRED_KEYS}
+    result["custom_sections"] = cleaned_sections
+    return result
 
 
 def chunk_segments(segments: list[dict], max_chars: int = CHUNK_SIZE,
@@ -101,8 +156,10 @@ def chunk_segments(segments: list[dict], max_chars: int = CHUNK_SIZE,
 def merge_parts(parts: list[dict]) -> dict:
     merged = {key: [] for key in REQUIRED_KEYS}
     merged["summary"] = ""
+    merged["custom_sections"] = []
     seen: set[str] = set()
     summaries: list[str] = []
+    custom: dict[str, dict] = {}
     for part in parts:
         if part.get("summary"):
             summaries.append(part["summary"])
@@ -113,13 +170,28 @@ def merge_parts(parts: list[dict]) -> dict:
                     continue
                 seen.add(signature)
                 merged[key].append(item)
+        for section in part.get("custom_sections", []):
+            key = section.get("key") or section.get("title")
+            target = custom.setdefault(key, {
+                "key": section.get("key", "custom"),
+                "title": section.get("title", ""),
+                "items": [],
+            })
+            for item in section.get("items", []):
+                signature = json.dumps(item, ensure_ascii=False, sort_keys=True)
+                if signature in seen:
+                    continue
+                seen.add(signature)
+                target["items"].append(item)
+    merged["custom_sections"] = [s for s in custom.values() if s["items"]]
     merged["summary"] = "；".join(summaries)[:1000]
     return merged
 
 
 def _request_valid(provider, segments: list[dict], hint: str,
-                   total_count: int) -> dict:
-    user = build_user_prompt(segments) + (hint or "")
+                   total_count: int, glossary: list[str] | None = None,
+                   custom_sections: list[dict] | None = None) -> dict:
+    user = build_user_prompt(segments, glossary, custom_sections) + (hint or "")
     last_error = None
     for _ in range(2):
         data = provider.complete_json(SYSTEM_PROMPT, user)
@@ -133,12 +205,15 @@ def _request_valid(provider, segments: list[dict], hint: str,
 
 def generate(cfg: Config, segments: list[dict], template_key: str = "standard",
              llm_settings: dict | None = None,
-             hint: str | None = None) -> dict:
+             hint: str | None = None,
+             custom_sections: list[dict] | None = None,
+             glossary: list[str] | None = None) -> dict:
     provider = build_llm(cfg, llm_settings)
     hint_text = TEMPLATE_HINTS.get(template_key, "") if hint is None else hint
     total_chars = sum(len(s["text"]) for s in segments)
     chunks = [segments] if total_chars <= CHUNK_THRESHOLD else chunk_segments(segments)
-    parts = [_request_valid(provider, chunk, hint_text, len(segments))
+    parts = [_request_valid(provider, chunk, hint_text, len(segments),
+                            glossary, custom_sections)
              for chunk in chunks]
     data = parts[0] if len(parts) == 1 else merge_parts(parts)
     return validate_minutes(data, len(segments))

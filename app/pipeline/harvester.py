@@ -54,8 +54,10 @@ def _harvest_one(cfg: Config, conn, path: Path) -> bool:
     uid, title = files.split_stem(path.stem)
     safe_uid = _safe_uid(uid)
     if safe_uid is None:
-        log_event("warn", "invalid_uid", uid=uid[:100], filename=path.name)
-        return False
+        # 设备直接投放的文件名可能含中文/空格，自动生成 uid，保留原名作为标题。
+        safe_uid = files.new_uid()
+        title = title or path.stem
+        log_event("info", "generated_uid", uid=safe_uid, filename=path.name)
 
     meta = _read_meta(path, title)
     row = meeting_repo.get_by_uid(conn, safe_uid)

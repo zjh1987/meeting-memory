@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}上传录音 · 会议记忆{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>上传录音</h1>
+    <div class="sub">离线录音补传，或把设备接入下方采集目录实现自动入库</div>
+  </div>
+  <a class="btn ghost" href="/meetings" data-tip="查看已入库会议">全部会议</a>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2 class="section-title">离线录音补传</h2>
+    <form id="upload-form">
+      <div class="upload-box" id="drop-zone">
+        <div class="field" style="margin-bottom:12px">
+          <label>音频文件（{{ info.formats }}）</label>
+          <input type="file" name="file" required
+                 accept=".m4a,.mp3,.wav,.opus,.aac,.amr,.flac">
+        </div>
+        <div class="muted">支持把文件直接拖进来，上传完成后自动进入转写队列。</div>
+      </div>
+      <div class="field" style="margin-top:16px">
+        <label>会议标题（缺省取文件名）</label>
+        <input name="title" placeholder="例如：三季度进度会">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>项目</label>
+          <select name="project_name" required>
+            {% for p in projects %}<option value="{{ p.name }}">{{ p.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>或新建项目</label>
+          <input name="new_project" placeholder="输入后优先于左侧下拉框">
+        </div>
+      </div>
+      <div class="field">
+        <label>纪要模板</label>
+        <select name="template_key">
+          {% for t in templates %}
+          <option value="{{ t.key }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="toolbar">
+        <button class="btn" type="submit" data-tip="上传并开始处理">开始上传</button>
+        <span class="muted" id="upload-percent"></span>
+        <span id="upload-error" class="error" style="margin:0"></span>
+      </div>
+      <div class="progress" style="margin-top:12px;display:none" id="upload-progress-wrap">
+        <i id="upload-progress"></i>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 class="section-title">设备自动上传目录</h2>
+    <p class="muted" style="margin-top:-6px">
+      这是采集线程实际监听的目录（未经 rename 的原始落地路径），拾音器、录音笔或专业设备把文件写到这里即可自动入库。
+    </p>
+    <div class="field">
+      <label>监听目录</label>
+      <input id="inbox-path" class="input" readonly value="{{ info.inbox }}">
+      <div class="toolbar" style="margin-top:8px">
+        <button class="btn ghost small" id="copy-inbox" data-tip="复制监听目录">复制路径</button>
+        <span id="copy-status" class="muted"></span>
+      </div>
+    </div>
+    <div class="stat-grid" style="grid-template-columns:1fr 1fr">
+      <div class="stat"><div class="k">待处理文件</div><div class="v">{{ info.pending }}</div></div>
+      <div class="stat"><div class="k">剩余磁盘</div><div class="v">{{ info.free_gb }} GB</div></div>
+      <div class="stat"><div class="k">扫描间隔</div><div class="v">{{ info.scan_interval }} 秒</div></div>
+      <div class="stat"><div class="k">单文件上限</div><div class="v">{{ info.max_upload_mb }} MB</div></div>
+    </div>
+    <p class="muted" style="margin:14px 0 0">
+      最长录音时长：{% if info.max_duration_min %}6 小时可调（当前 {{ info.max_duration_min }} 分钟）{% else %}不限制{% endif %}，
+      可在管理后台调整。
+    </p>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h2 class="section-title">设备接入说明</h2>
+  <div class="grid2">
+    <div>
+      <h3 style="font-size:15px;margin:0 0 8px">1. 写入方式</h3>
+      <p class="muted" style="margin:0 0 14px">
+        可用 SMB / NFS 挂载、rsync、scp、FTP 同步等任意方式写入监听目录。为避免采集中途读取到半截文件，
+        建议设备先写 <code>会议.m4a.part</code>，写完后再改名为 <code>会议.m4a</code>；
+        系统只处理支持的音频后缀，并自动忽略 <code>.part</code>。
+      </p>
+      <h3 style="font-size:15px;margin:0 0 8px">2. 文件名</h3>
+      <p class="muted" style="margin:0">
+        任意文件名都可以，中文、空格均可；系统会自动生成唯一 uid。建议采用
+        <code>设备名-日期-会议名.m4a</code> 便于排查。若文件名形如
+        <code>uid__标题.m4a</code>，系统会直接沿用该 uid。
+      </p>
+    </div>
+    <div>
+      <h3 style="font-size:15px;margin:0 0 8px">3. 可选旁挂信息（同名 .json）</h3>
+      <p class="muted" style="margin:0 0 8px">
+        在音频同目录放一个同名 JSON，可指定项目、标题与录音时间；没有该文件时归入“未归类”。
+      </p>
+      <pre class="input" style="margin:0;white-space:pre-wrap;font-size:12px">{
+  "project": "三季度项目",
+  "title": "设备自动上传会议",
+  "recorded_at": "2026-11-21 09:30:00"
+}</pre>
+      <p class="muted" style="margin:8px 0 0">
+        示例：<code>会议.m4a</code> 对应 <code>会议.json</code>。
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+const form = document.getElementById("upload-form");
+const drop = document.getElementById("drop-zone");
+if (drop) {
+  ["dragenter", "dragover"].forEach(name => drop.addEventListener(name, e => {
+    e.preventDefault(); drop.classList.add("drag");
+  }));
+  ["dragleave", "drop"].forEach(name => drop.addEventListener(name, e => {
+    e.preventDefault(); drop.classList.remove("drag");
+  }));
+  drop.addEventListener("drop", e => {
+    const input = form.querySelector('input[type="file"]');
+    if (e.dataTransfer.files.length) input.files = e.dataTransfer.files;
+  });
+}
+if (form) {
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const newProject = (data.get("new_project") || "").trim();
+    if (newProject) data.set("project_name", newProject);
+    const wrap = document.getElementById("upload-progress-wrap");
+    const bar = document.getElementById("upload-progress");
+    const percent = document.getElementById("upload-percent");
+    const err = document.getElementById("upload-error");
+    wrap.style.display = "block";
+    bar.style.width = "0%";
+    percent.textContent = "0%";
+    err.textContent = "";
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/meetings");
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const value = Math.round(e.loaded / e.total * 100);
+      bar.style.width = value + "%";
+      percent.textContent = value + "%";
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        percent.textContent = "上传完成，进入处理队列";
+        location.href = "/m/" + JSON.parse(xhr.responseText).uid;
+      } else {
+        try { err.textContent = JSON.parse(xhr.responseText).error.message; }
+        catch (_) { err.textContent = "上传失败"; }
+        percent.textContent = "";
+      }
+    };
+    xhr.onerror = () => { err.textContent = "网络错误"; percent.textContent = ""; };
+    xhr.send(data);
+  });
+}
+const copyBtn = document.getElementById("copy-inbox");
+if (copyBtn) {
+  copyBtn.addEventListener("click", async () => {
+    const path = document.getElementById("inbox-path").value;
+    try {
+      await navigator.clipboard.writeText(path);
+      document.getElementById("copy-status").textContent = "已复制";
+    } catch (_) {
+      const input = document.getElementById("inbox-path");
+      input.select();
+      document.execCommand("copy");
+      document.getElementById("copy-status").textContent = "已复制";
+    }
+  });
+}
+</script>
+{% endblock %}

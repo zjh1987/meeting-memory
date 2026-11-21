@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}概览 · 会议记忆{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>工作概览</h1>
+    <div class="sub">{{ today }} · 共 {{ projects }} 个项目 · {{ total }} 场会议</div>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/upload" data-tip="上传离线录音或查看采集目录">上传录音</a>
+    <a class="btn ghost" href="/meetings" data-tip="按月查看全部会议">全部会议</a>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat">
+    <div class="k">会议总数</div>
+    <div class="v">{{ total }}</div>
+    <div class="muted">全部已入库会议</div>
+  </div>
+  <div class="stat">
+    <div class="k">本月新增</div>
+    <div class="v">{{ month_count }}</div>
+    <div class="muted">按录音时间统计</div>
+  </div>
+  <div class="stat">
+    <div class="k">累计时长</div>
+    <div class="v">{{ total_hours }}<span style="font-size:14px;color:var(--muted)"> 小时</span></div>
+    <div class="muted">已完成转写的录音</div>
+  </div>
+  <div class="stat">
+    <div class="k">待办事项</div>
+    <div class="v">{{ open_actions }}</div>
+    <div class="muted">尚未闭环的 action item</div>
+  </div>
+</div>
+
+<div class="grid2" style="margin-top:16px">
+  <div class="card">
+    <h2 class="section-title">近 6 个月会议趋势</h2>
+    <div class="bars">
+      {% for m in months %}
+      <div class="bar" title="{{ m.label }}：{{ m.count }} 场">
+        <span class="n">{{ m.count }}</span>
+        <i style="height:{{ m.height if m.count else 2 }}%"></i>
+        <span class="m">{{ m.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="section-title">会议状态分布</h2>
+    <div class="donut-wrap">
+      <div class="donut" style="{% if total %}background: conic-gradient(var(--blue) 0 {{ status_pct.done }}%, #c7c7cc {{ status_pct.done }}% {{ status_pct.done + status_pct.processing }}%, var(--danger) {{ status_pct.done + status_pct.processing }}% 100%);{% else %}background:#e8e8ed;{% endif %}">
+        <div class="center">
+          <strong>{{ total }}</strong>
+          <span class="muted" style="font-size:12px">总会议</span>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="legend-row"><span class="dot" style="background:var(--blue)"></span>已完成 <b>{{ status.done }}</b></div>
+        <div class="legend-row"><span class="dot" style="background:#c7c7cc"></span>处理中 <b>{{ status.processing }}</b></div>
+        <div class="legend-row"><span class="dot" style="background:var(--danger)"></span>失败 <b>{{ status.failed }}</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2" style="margin-top:16px">
+  <div class="card">
+    <h2 class="section-title">最近一次会议纪要</h2>
+    {% if latest %}
+    <div class="muted" style="margin-bottom:10px">
+      {{ latest.title }} · {{ latest.recorded_at }} · {{ latest.duration_sec|mmss }}
+    </div>
+    <p class="preview-summary">{{ latest.minutes.summary }}</p>
+    {% if latest.actions %}
+    <div class="mini-actions">
+      {% for item in latest.actions %}
+      <div class="item"><span><strong>{{ item.owner }}</strong>：{{ item.task }}</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <p style="margin:16px 0 0"><a href="/m/{{ latest.uid }}">查看完整纪要 →</a></p>
+    {% else %}
+    <p class="muted" style="margin:0">还没有已完成的会议纪要，上传一段录音开始吧。</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h2 class="section-title">最近会议</h2>
+    {% for m in recent %}
+    <div class="meeting-row" style="padding:12px 0">
+      <div style="min-width:0">
+        <a class="title" href="/m/{{ m.uid }}">{{ m.title }}</a>
+        <div class="meta">{{ m.project_name }} · {{ m.recorded_at }} · {{ m.duration_sec|mmss }}</div>
+      </div>
+      <span class="chip {% if m.status == 'done' %}done{% elif m.status == 'failed' %}failed{% else %}processing{% endif %}">
+        {{ labels.get(m.status, m.status) }}
+      </span>
+    </div>
+    {% else %}
+    <p class="muted" style="margin:0">暂无会议。</p>
+    {% endfor %}
+  </div>
+</div>
+
+{% if recent_actions %}
+<div class="card" style="margin-top:16px">
+  <h2 class="section-title">待跟进事项</h2>
+  <ul class="list-plain">
+    {% for item in recent_actions %}
+    <li>
+      <span><strong>{{ item.owner or "待指定" }}</strong>：{{ item.task }}</span>
+      <a class="muted" href="/m/{{ item.uid }}">{{ item.title }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endblock %}

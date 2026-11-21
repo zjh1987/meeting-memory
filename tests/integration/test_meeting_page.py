@@ -33,7 +33,7 @@ def _seed(cfg, status="done"):
 def _client(cfg):
     client = TestClient(create_app(cfg, start_threads=False))
     client.__enter__()
-    client.post("/login", data={"password": "test-pass"})
+    client.post("/login", data={"username": "admin", "password": "test-pass"})
     return client
 
 

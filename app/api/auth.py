@@ -6,29 +6,45 @@ from collections import defaultdict, deque
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from app.services import users as user_service
+from app.storage import db
+
 router = APIRouter()
 COOKIE_NAME = "mm_session"
 SESSION_SECONDS = 7 * 86400
 
 
-def make_token(secret: str, expires_ts: int) -> str:
-    payload = str(expires_ts)
+def make_token(secret: str, expires_ts: int, user_id: int = 0,
+               token_version: int = 0) -> str:
+    payload = f"{expires_ts}.{user_id}.{token_version}"
     sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return f"{payload}.{sig}"
 
 
-def verify_token(secret: str, token: str | None, now_ts: int | None = None) -> bool:
-    if not token or "." not in token:
-        return False
-    payload, sig = token.split(".", 1)
+def read_token(secret: str, token: str | None,
+               now_ts: int | None = None) -> dict | None:
+    if not token:
+        return None
+    try:
+        payload, sig = token.rsplit(".", 1)
+        expires_raw, user_raw, version_raw = payload.split(".")
+        expires = int(expires_raw)
+        user_id = int(user_raw)
+        token_version = int(version_raw)
+    except (ValueError, AttributeError):
+        return None
     expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected):
-        return False
-    try:
-        expires = int(payload)
-    except ValueError:
-        return False
-    return expires > (int(time.time()) if now_ts is None else now_ts)
+        return None
+    if expires <= (int(time.time()) if now_ts is None else now_ts):
+        return None
+    return {"uid": user_id, "token_version": token_version,
+            "expires": expires}
+
+
+def verify_token(secret: str, token: str | None,
+                 now_ts: int | None = None) -> bool:
+    return read_token(secret, token, now_ts) is not None
 
 
 class LoginLimiter:
@@ -51,23 +67,34 @@ class LoginLimiter:
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     from app.web import render
-    return render.render("login.html", error=None, standalone=True)
+    return render.render("login.html", error=None, standalone=True,
+                         username="")
 
 
 @router.post("/login")
-def login_submit(request: Request, password: str = Form("")):
+def login_submit(request: Request, username: str = Form("admin"),
+                 password: str = Form("")):
+    from app.web import render
     cfg = request.app.state.cfg
     ip = request.client.host if request.client else "unknown"
     if not request.app.state.limiter.allow(ip):
         from app.api.errors import ApiError
         raise ApiError(429, "rate_limited", "登录尝试过于频繁，请稍后再试")
-    if password != cfg.app_password:
-        from app.web import render
+
+    conn = db.connect(cfg.db_path)
+    try:
+        user = user_service.authenticate(conn, username, password)
+    finally:
+        conn.close()
+    if user is None:
         return HTMLResponse(
-            render.render("login.html", error="口令不正确", standalone=True),
+            render.render("login.html", error="账号或密码不正确",
+                          standalone=True, username=username),
             status_code=401,
         )
-    token = make_token(cfg.cookie_secret, int(time.time()) + SESSION_SECONDS)
+    token = make_token(cfg.cookie_secret,
+                       int(time.time()) + SESSION_SECONDS,
+                       user["id"], user["token_version"])
     resp = RedirectResponse("/", status_code=302)
     resp.set_cookie(COOKIE_NAME, token, httponly=True,
                     samesite="lax", max_age=SESSION_SECONDS)

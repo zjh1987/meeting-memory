@@ -8,7 +8,7 @@ from app.storage import db, meeting_repo, relation_repo
 def test_upload_to_archive_and_relation(cfg):
     app = create_app(cfg, start_threads=False)
     with TestClient(app) as client:
-        client.post("/login", data={"password": "test-pass"})
+        client.post("/login", data={"username": "admin", "password": "test-pass"})
 
         first = client.post(
             "/api/meetings",

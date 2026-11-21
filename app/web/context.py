@@ -12,9 +12,12 @@ def build_context(conn, meeting: dict) -> dict:
         "SELECT name FROM project WHERE id=?", (meeting["project_id"],)
     ).fetchone()
     tmpl = settings_service.get_template(conn, meeting["template_key"])
+    custom_minutes = {section.get("key"): section
+                      for section in minutes.get("custom_sections", [])}
     return {
         "minutes": minutes,
         "transcript": transcript,
+        "custom_minutes": custom_minutes,
         "actions": action_repo.list_for(conn, meeting["id"]),
         "relations": relation_repo.list_for(conn, meeting["id"]),
         "tmpl": tmpl,

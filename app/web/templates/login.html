@@ -8,14 +8,19 @@
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
     <form method="post" action="/login">
       <div class="field">
-        <label for="password">访问口令</label>
-        <input id="password" name="password" type="password" autofocus required
-               placeholder="请输入访问口令">
+        <label for="username">账号</label>
+        <input id="username" name="username" type="text" autofocus required
+               value="{{ username or 'admin' }}" placeholder="登录账号">
+      </div>
+      <div class="field">
+        <label for="password">密码</label>
+        <input id="password" name="password" type="password" required
+               placeholder="请输入密码">
       </div>
       <button class="btn" type="submit" style="width:100%"
               data-tip="进入会议记忆">进入</button>
     </form>
-    <p class="muted" style="margin-bottom:0">使用前请确认已告知参会人录音用途。</p>
+    <p class="muted" style="margin-bottom:0">首次使用的默认管理员账号为 admin，密码取 APP_PASSWORD。</p>
   </div>
 </div>
 {% endblock %}

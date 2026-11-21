@@ -114,16 +114,20 @@ def save_asr(conn, data: dict) -> dict:
 def list_templates(conn) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM minute_template ORDER BY builtin DESC, name").fetchall()
-    result = []
-    for row in rows:
-        result.append({
-            "key": row["key"],
-            "name": row["name"],
-            "sections": json.loads(row["sections"]),
-            "hint": row["hint"],
-            "builtin": bool(row["builtin"]),
-        })
-    return result
+    return [_template_dict(row) for row in rows]
+
+
+def _template_dict(row) -> dict:
+    return {
+        "key": row["key"],
+        "name": row["name"],
+        "description": row["description"],
+        "scene": row["scene"],
+        "sections": json.loads(row["sections"]),
+        "custom_sections": json.loads(row["custom_sections"] or "[]"),
+        "hint": row["hint"],
+        "builtin": bool(row["builtin"]),
+    }
 
 
 def get_template(conn, key: str) -> dict:
@@ -134,21 +138,46 @@ def get_template(conn, key: str) -> dict:
                            ).fetchone()
     if row is None:
         return {"key": "standard", "name": "常规会议", "hint": "",
+                "description": "", "scene": "常规", "custom_sections": [],
                 "sections": list(SECTION_KEYS)}
-    return {
-        "key": row["key"],
-        "name": row["name"],
-        "sections": json.loads(row["sections"]),
-        "hint": row["hint"],
-        "builtin": bool(row["builtin"]),
-    }
+    return _template_dict(row)
+
+
+def _clean_custom_sections(raw) -> list[dict]:
+    if raw is None:
+        raw = []
+    if not isinstance(raw, list):
+        raise ValueError("自定义模块必须是数组")
+    if len(raw) > 8:
+        raise ValueError("自定义模块最多 8 个")
+    result = []
+    seen = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("自定义模块格式不正确")
+        key = str(item.get("key", "")).strip()
+        title = str(item.get("title", "")).strip()
+        instruction = str(item.get("instruction", "")).strip()
+        if not TEMPLATE_KEY.fullmatch(key):
+            raise ValueError("自定义模块标识只能使用小写字母、数字、下划线和减号")
+        if not title:
+            raise ValueError("自定义模块标题不能为空")
+        if key in seen:
+            raise ValueError(f"自定义模块标识重复：{key}")
+        seen.add(key)
+        result.append({"key": key, "title": title,
+                       "instruction": instruction})
+    return result
 
 
 def save_template(conn, data: dict) -> dict:
     key = str(data.get("key", "")).strip()
     name = str(data.get("name", "")).strip()
     hint = str(data.get("hint", "")).strip()
+    description = str(data.get("description", "")).strip()
+    scene = str(data.get("scene", "")).strip() or "常规"
     sections = [s for s in data.get("sections", []) if s in SECTION_KEYS]
+    custom_sections = _clean_custom_sections(data.get("custom_sections"))
     if not TEMPLATE_KEY.fullmatch(key):
         raise ValueError("模板标识只能使用小写字母、数字、下划线和减号")
     if not name:
@@ -159,18 +188,24 @@ def save_template(conn, data: dict) -> dict:
                        (key,)).fetchone()
     if row and row["builtin"]:
         conn.execute(
-            "UPDATE minute_template SET name=?, sections=?, hint=?, updated_at=?"
+            "UPDATE minute_template SET name=?, sections=?, hint=?,"
+            " description=?, scene=?, custom_sections=?, updated_at=?"
             " WHERE key=?",
-            (name, json.dumps(sections), hint, _now(), key),
+            (name, json.dumps(sections), hint, description, scene,
+             json.dumps(custom_sections, ensure_ascii=False), _now(), key),
         )
     else:
         conn.execute(
             "INSERT INTO minute_template (key, name, sections, hint, builtin,"
-            " updated_at) VALUES (?,?,?,?,0,?)"
+            " description, scene, custom_sections, updated_at)"
+            " VALUES (?,?,?,?,0,?,?,?,?)"
             " ON CONFLICT(key) DO UPDATE SET name=excluded.name,"
             " sections=excluded.sections, hint=excluded.hint,"
+            " description=excluded.description, scene=excluded.scene,"
+            " custom_sections=excluded.custom_sections,"
             " updated_at=excluded.updated_at",
-            (key, name, json.dumps(sections), hint, _now()),
+            (key, name, json.dumps(sections), hint, description, scene,
+             json.dumps(custom_sections, ensure_ascii=False), _now()),
         )
     return get_template(conn, key)
 

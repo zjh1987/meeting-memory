@@ -12,10 +12,15 @@
   <div class="wrap">
     <a class="brand" href="/">会议记忆</a>
     <nav class="nav">
-      <a href="/" data-tip="查看全部会议与上传录音">会议列表</a>
-      <a href="/admin" data-tip="配置模型、热词、模板与会议管理">管理后台</a>
+      <a href="/" data-tip="总览统计与最近纪要">概览</a>
+      <a href="/meetings" data-tip="按月查看全部会议">会议</a>
+      <a href="/upload" data-tip="上传离线录音或配置采集目录">上传</a>
+      {% if user and user.role == "admin" %}
+      <a href="/admin" data-tip="配置模型、热词、模板、账号与会议">管理后台</a>
+      {% endif %}
       <a href="/site/index.html" target="_blank"
          data-tip="只读 HTML 归档，可分享或长期保存">静态归档</a>
+      <span class="muted" style="font-size:13px">{{ user.display_name if user else "" }}</span>
       <form method="post" action="/logout" style="display:inline">
         <button class="btn ghost small" type="submit"
                 data-tip="清除登录状态">退出</button>

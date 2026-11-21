@@ -2,13 +2,14 @@ import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import admin, auth, meetings, projects, upload
-from app.api.auth import COOKIE_NAME, verify_token
+from app.api.auth import COOKIE_NAME, read_token
 from app.api.errors import ApiError, api_error_handler
 from app.config import Config
+from app.services import users as user_service
 from app.storage import db
 from app.web import pages
 
@@ -22,6 +23,11 @@ def create_app(cfg: Config | None = None, start_threads: bool = True) -> FastAPI
     from app.core.logging import setup_logging
     setup_logging(cfg.log_dir)
     db.init_db(cfg.db_path)
+    conn = db.connect(cfg.db_path)
+    try:
+        user_service.ensure_admin(cfg, conn)
+    finally:
+        conn.close()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -50,15 +56,35 @@ def create_app(cfg: Config | None = None, start_threads: bool = True) -> FastAPI
         path = request.url.path
         if path in {"/login", "/healthz"} or path.startswith("/static/"):
             return await call_next(request)
-        token = request.cookies.get(COOKIE_NAME)
-        if verify_token(cfg.cookie_secret, token):
-            return await call_next(request)
-        if path.startswith("/api/"):
-            return JSONResponse(
-                {"error": {"code": "unauthorized", "message": "未登录"}},
-                status_code=401,
-            )
-        return RedirectResponse("/login", status_code=302)
+        claims = read_token(cfg.cookie_secret,
+                            request.cookies.get(COOKIE_NAME))
+        user = None
+        if claims:
+            conn = db.connect(cfg.db_path)
+            try:
+                user = user_service.get_user(conn, claims["uid"])
+            finally:
+                conn.close()
+            if user and user["token_version"] != claims["token_version"]:
+                user = None
+        if user is None:
+            if path.startswith("/api/"):
+                return JSONResponse(
+                    {"error": {"code": "unauthorized", "message": "未登录"}},
+                    status_code=401,
+                )
+            return RedirectResponse("/login", status_code=302)
+        request.state.user = user
+        if (path == "/admin" or path.startswith("/api/admin")) \
+                and user["role"] != "admin":
+            if path.startswith("/api/"):
+                return JSONResponse(
+                    {"error": {"code": "forbidden", "message": "需要管理员权限"}},
+                    status_code=403,
+                )
+            return HTMLResponse(
+                "<h1>403</h1><p>该页面仅管理员可访问。</p>", status_code=403)
+        return await call_next(request)
 
     @app.get("/healthz")
     def healthz():

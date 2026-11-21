@@ -28,9 +28,9 @@ def test_api_returns_401_json(cfg):
 def test_login_success_and_logout(cfg):
     app = create_app(cfg, start_threads=False)
     with TestClient(app) as client:
-        bad = client.post("/login", data={"password": "wrong"})
+        bad = client.post("/login", data={"username": "admin", "password": "wrong"})
         assert bad.status_code == 401
-        ok = client.post("/login", data={"password": "test-pass"}, follow_redirects=False)
+        ok = client.post("/login", data={"username": "admin", "password": "test-pass"}, follow_redirects=False)
         assert ok.status_code == 302
         assert client.get("/").status_code == 200
         client.post("/logout", follow_redirects=False)
@@ -40,7 +40,7 @@ def test_login_success_and_logout(cfg):
 def test_login_rate_limited(cfg):
     app = create_app(cfg, start_threads=False)
     with TestClient(app) as client:
-        codes = [client.post("/login", data={"password": "x"}).status_code
+        codes = [client.post("/login", data={"username": "admin", "password": "x"}).status_code
                  for _ in range(6)]
         assert codes[-1] == 429
 

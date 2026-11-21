@@ -56,7 +56,7 @@ def test_uploading_record_is_promoted(cfg):
         conn.close()
 
 
-def test_invalid_uid_is_skipped(cfg):
+def test_unsafe_uid_gets_generated_uid(cfg):
     assert harvester._safe_uid("..") is None
     assert harvester._safe_uid("../evil") is None
     assert harvester._safe_uid("20261121-100000-abcd") == "20261121-100000-abcd"
@@ -66,11 +66,13 @@ def test_invalid_uid_is_skipped(cfg):
     (cfg.inbox_dir / "bad uid__会议.json").write_text(
         '{"project": "项目A", "recorded_at": "2026-11-21 09:00:00"}',
         encoding="utf-8")
-    assert harvest_once(cfg) == 0
-    assert path.exists()
+    assert harvest_once(cfg) == 1
+    assert not path.exists()
     conn = db.connect(cfg.db_path)
     try:
-        assert conn.execute("SELECT COUNT(*) AS n FROM meeting").fetchone()["n"] == 0
+        row = conn.execute("SELECT uid, title FROM meeting").fetchone()
+        assert row["uid"] != "bad uid"
+        assert row["title"] == "会议"
     finally:
         conn.close()
 

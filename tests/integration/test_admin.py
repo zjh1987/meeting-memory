@@ -13,7 +13,7 @@ from app.services import settings as settings_service
 def _client(cfg):
     app = create_app(cfg, start_threads=False)
     client = TestClient(app)
-    client.post("/login", data={"password": "test-pass"})
+    client.post("/login", data={"username": "admin", "password": "test-pass"})
     return client
 
 
@@ -44,8 +44,13 @@ def test_admin_hotwords_and_templates(cfg):
 
     resp = client.post("/api/admin/templates", json={
         "key": "weekly", "name": "周会",
-        "sections": ["summary", "actions"], "hint": "重点提炼下周计划"})
+        "scene": "周会", "description": "固定周会",
+        "sections": ["summary", "actions"], "hint": "重点提炼下周计划",
+        "custom_sections": [{"key": "risks", "title": "风险与依赖",
+                             "instruction": "列出风险"}]})
     assert resp.status_code == 200
+    saved = resp.json()["template"]
+    assert saved["custom_sections"][0]["title"] == "风险与依赖"
     keys = {t["key"] for t in client.get("/api/admin/templates").json()["items"]}
     assert {"standard", "weekly"} <= keys
 

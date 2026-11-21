@@ -8,7 +8,7 @@ def _client(cfg):
     app = create_app(cfg, start_threads=False)
     client = TestClient(app)
     client.__enter__()
-    client.post("/login", data={"password": "test-pass"})
+    client.post("/login", data={"username": "admin", "password": "test-pass"})
     return client
 
 

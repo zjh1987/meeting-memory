@@ -15,6 +15,7 @@
   <button data-tab="hotwords" data-tip="维护专有名词与项目名，提高识别准确率">热词</button>
   <button data-tab="templates" data-tip="自定义纪要展示模块与提示词">纪要模板</button>
   <button data-tab="meetings" data-tip="结案、重生成、删除与重建归档">会议管理</button>
+  <button data-tab="users" data-tip="管理员账号、密码与成员权限">权限</button>
 </div>
 
 <!-- 大模型 -->
@@ -132,6 +133,18 @@
       <label>模板名称</label>
       <input id="tpl-name" placeholder="例如：周会">
     </div>
+    <div class="field">
+      <label>适用场景</label>
+      <select id="tpl-scene">
+        <option>常规</option><option>周会</option><option>复盘</option>
+        <option>决策</option><option>访谈</option><option>汇报</option>
+        <option>培训</option><option>座谈</option><option>自定义</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>一句话说明</label>
+      <input id="tpl-description" placeholder="例如：适合项目结束后的复盘，沉淀经验与改进项">
+    </div>
   </div>
   <div class="field">
     <label>展示模块</label>
@@ -145,19 +158,31 @@
     </div>
   </div>
   <div class="field">
-    <label>模板提示词</label>
-    <textarea id="tpl-hint" style="min-height:110px"
-              placeholder="例如：模板：周会。重点提炼本周进展、风险与下周计划。"></textarea>
+    <label>自定义展示模块</label>
+    <div id="tpl-custom-list" style="display:grid;gap:10px"></div>
+    <div class="toolbar" style="margin-top:8px">
+      <button class="btn ghost small" id="tpl-custom-add" type="button"
+              data-tip="增加一个自定义卡片，例如风险与依赖">+ 添加模块</button>
+    </div>
+    <div class="hint">模块会按顺序展示在固定模块之后，适合风险、客户诉求、关键数据等场景。</div>
+  </div>
+  <div class="field">
+    <label>模板提示词（专业性主要来自这里）</label>
+    <textarea id="tpl-hint" style="min-height:130px"
+              placeholder="例如：模板：项目复盘。围绕目标、结果、偏差、原因、经验教训组织内容。"></textarea>
+    <div class="hint">写清楚关注重点、输出顺序和禁止事项；系统会先注入“只依据原文、必须引用”的通用规则。</div>
   </div>
   <div class="toolbar">
     <button class="btn" id="tpl-save" data-tip="新建或更新模板">保存模板</button>
     <button class="btn ghost" id="tpl-reset" data-tip="清空表单，准备新建">清空表单</button>
     <span id="tpl-status" class="muted"></span>
   </div>
-  <table style="margin-top:18px">
-    <thead><tr><th>标识</th><th>名称</th><th>模块</th><th>类型</th><th></th></tr></thead>
-    <tbody id="tpl-list"></tbody>
-  </table>
+  <div style="overflow-x:auto;margin-top:18px">
+    <table>
+      <thead><tr><th>标识</th><th>名称</th><th>场景</th><th>模块</th><th>类型</th><th></th></tr></thead>
+      <tbody id="tpl-list"></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- 会议管理 -->
@@ -177,6 +202,64 @@
       <thead><tr><th>会议</th><th>项目</th><th>时间</th><th>状态</th><th>操作</th></tr></thead>
       <tbody id="meetings-list"></tbody>
     </table>
+  </div>
+</div>
+
+<!-- 权限 -->
+<div class="card tab-panel hidden" id="panel-users">
+  <h2 class="section-title">账号与权限</h2>
+  <p class="muted" style="margin-top:-6px">
+    管理员可维护账号与模型设置；普通成员可以查看、上传和查看纪要，但不能进入管理后台。
+  </p>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>账号</th><th>显示名</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>
+      <tbody id="users-list"></tbody>
+    </table>
+  </div>
+  <h3 style="font-size:16px;margin:22px 0 12px">新增账号</h3>
+  <div class="grid2">
+    <div class="field">
+      <label>登录账号</label>
+      <input id="user-username" placeholder="2-32 位字母、数字、点、下划线或减号">
+    </div>
+    <div class="field">
+      <label>显示名</label>
+      <input id="user-display" placeholder="例如：张敏">
+    </div>
+    <div class="field">
+      <label>初始密码</label>
+      <input id="user-password" type="password" autocomplete="new-password"
+             placeholder="至少 8 位">
+    </div>
+    <div class="field">
+      <label>角色</label>
+      <select id="user-role">
+        <option value="member">普通成员</option>
+        <option value="admin">管理员</option>
+      </select>
+    </div>
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="user-create" data-tip="创建账号并立即生效">创建账号</button>
+    <span id="user-status" class="muted"></span>
+  </div>
+
+  <h3 style="font-size:16px;margin:26px 0 12px">修改我的密码</h3>
+  <div class="grid2">
+    <div class="field">
+      <label>当前密码</label>
+      <input id="pw-old" type="password" autocomplete="current-password">
+    </div>
+    <div class="field">
+      <label>新密码</label>
+      <input id="pw-new" type="password" autocomplete="new-password"
+             placeholder="至少 8 位">
+    </div>
+  </div>
+  <div class="toolbar">
+    <button class="btn ghost" id="pw-save" data-tip="修改后需要重新登录">更新密码</button>
+    <span id="pw-status" class="muted"></span>
   </div>
 </div>
 
@@ -321,32 +404,79 @@ $("hotwords-save").addEventListener("click", async () => {
 });
 
 let templatesCache = [];
+function addCustomRow(section = {}) {
+  const wrap = document.createElement("div");
+  wrap.className = "custom-row";
+  wrap.innerHTML = `
+    <div class="field" style="margin:0">
+      <label>模块标识</label>
+      <input data-role="key" value="${esc(section.key || "")}" placeholder="risks">
+    </div>
+    <div class="field" style="margin:0">
+      <label>标题</label>
+      <input data-role="title" value="${esc(section.title || "")}" placeholder="风险与依赖">
+    </div>
+    <div class="field" style="margin:0">
+      <label>写作要求</label>
+      <input data-role="instruction" value="${esc(section.instruction || "")}"
+             placeholder="列出风险、依赖和缓解措施">
+    </div>
+    <button class="btn danger small" type="button" data-remove>移除</button>`;
+  wrap.querySelector("[data-remove]").addEventListener("click", () => wrap.remove());
+  $("tpl-custom-list").appendChild(wrap);
+}
+function collectCustomSections() {
+  return Array.from(document.querySelectorAll("#tpl-custom-list .custom-row"))
+    .map(row => ({
+      key: row.querySelector('[data-role="key"]').value.trim(),
+      title: row.querySelector('[data-role="title"]').value.trim(),
+      instruction: row.querySelector('[data-role="instruction"]').value.trim()
+    })).filter(section => section.title);
+}
 function renderTemplates(items) {
   templatesCache = items;
   $("tpl-list").innerHTML = items.map(t => `
     <tr>
       <td class="muted">${esc(t.key)}</td>
-      <td><strong>${esc(t.name)}</strong></td>
-      <td class="muted">${t.sections.map(s => esc(s)).join(" / ")}</td>
+      <td><strong>${esc(t.name)}</strong>
+          <div class="muted">${esc(t.description || "")}</div></td>
+      <td>${esc(t.scene || "常规")}</td>
+      <td class="muted">${t.sections.map(s => esc(s)).join(" / ")}
+          ${t.custom_sections.length ? "<br>自定义：" + t.custom_sections.map(s => esc(s.title)).join(" / ") : ""}</td>
       <td>${t.builtin ? "内置" : "自定义"}</td>
-      <td style="text-align:right">
+      <td style="text-align:right;white-space:nowrap">
         <button class="btn ghost small" data-edit="${esc(t.key)}">编辑</button>
+        <button class="btn ghost small" data-copy="${esc(t.key)}">复制</button>
         ${t.builtin ? "" : `<button class="btn danger small" data-delete="${esc(t.key)}">删除</button>`}
       </td>
     </tr>`).join("");
 }
+$("tpl-custom-add").addEventListener("click", () => addCustomRow());
 $("tpl-list").addEventListener("click", async (event) => {
   const edit = event.target.closest("button[data-edit]");
+  const copy = event.target.closest("button[data-copy]");
   const del = event.target.closest("button[data-delete]");
-  if (edit) {
-    const tpl = templatesCache.find(t => t.key === edit.dataset.edit);
+  const fill = (tpl) => {
     $("tpl-key").value = tpl.key;
     $("tpl-name").value = tpl.name;
-    $("tpl-hint").value = tpl.hint;
+    $("tpl-scene").value = tpl.scene || "常规";
+    $("tpl-description").value = tpl.description || "";
+    $("tpl-hint").value = tpl.hint || "";
     document.querySelectorAll("#tpl-sections input").forEach(box => {
       box.checked = tpl.sections.includes(box.value);
     });
+    $("tpl-custom-list").innerHTML = "";
+    (tpl.custom_sections || []).forEach(section => addCustomRow(section));
+  };
+  if (edit) {
+    fill(templatesCache.find(t => t.key === edit.dataset.edit));
     window.scrollTo({top: 0, behavior: "smooth"});
+  }
+  if (copy) {
+    const tpl = templatesCache.find(t => t.key === copy.dataset.copy);
+    fill({...tpl, key: (tpl.key + "_copy").slice(0, 32),
+          name: tpl.name + " 副本"});
+    setStatus("tpl-status", "已载入副本内容，可修改标识后保存为新模板");
   }
   if (del) {
     if (!confirm("确定删除模板 " + del.dataset.delete + "？")) return;
@@ -365,14 +495,20 @@ $("tpl-save").addEventListener("click", async () => {
     await api("/api/admin/templates", {method: "POST", body: JSON.stringify({
       key: $("tpl-key").value.trim(),
       name: $("tpl-name").value.trim(),
-      sections, hint: $("tpl-hint").value.trim()
+      scene: $("tpl-scene").value,
+      description: $("tpl-description").value.trim(),
+      sections,
+      custom_sections: collectCustomSections(),
+      hint: $("tpl-hint").value.trim()
     })});
     setStatus("tpl-status", "已保存");
     await loadSettings();
   } catch (err) { setStatus("tpl-status", err.message, true); }
 });
 $("tpl-reset").addEventListener("click", () => {
-  ["tpl-key", "tpl-name", "tpl-hint"].forEach(id => $(id).value = "");
+  ["tpl-key", "tpl-name", "tpl-description", "tpl-hint"].forEach(id => $(id).value = "");
+  $("tpl-scene").value = "常规";
+  $("tpl-custom-list").innerHTML = "";
   document.querySelectorAll("#tpl-sections input").forEach(box => box.checked = false);
 });
 
@@ -426,7 +562,82 @@ $("archives-rebuild").addEventListener("click", async () => {
   } catch (err) { setStatus("meetings-status", err.message, true); }
 });
 
+let usersCache = [];
+let currentUserId = null;
+async function loadUsers() {
+  const data = await api("/api/admin/users");
+  usersCache = data.items;
+  currentUserId = data.current;
+  $("users-list").innerHTML = data.items.map(u => {
+    const self = u.id === currentUserId;
+    return `
+      <tr>
+        <td><strong>${esc(u.username)}</strong></td>
+        <td>${esc(u.display_name)}</td>
+        <td><span class="chip ${u.role === "admin" ? "processing" : ""}">${u.role === "admin" ? "管理员" : "普通成员"}</span></td>
+        <td class="muted">${esc(u.created_at)}</td>
+        <td style="white-space:nowrap">
+          ${self ? '<span class="muted">当前账号</span>' : `
+            <button class="btn ghost small" data-reset="${u.id}">重置密码</button>
+            <button class="btn ghost small" data-role="${u.id}">切换角色</button>
+            <button class="btn danger small" data-remove="${u.id}">删除</button>`}
+        </td>
+      </tr>`;
+  }).join("");
+}
+$("users-list").addEventListener("click", async (event) => {
+  const reset = event.target.closest("button[data-reset]");
+  const role = event.target.closest("button[data-role]");
+  const remove = event.target.closest("button[data-remove]");
+  try {
+    if (reset) {
+      const password = prompt("输入新密码（至少 8 位）");
+      if (!password) return;
+      await api(`/api/admin/users/${reset.dataset.reset}`, {
+        method: "PUT", body: JSON.stringify({password})});
+      setStatus("user-status", "密码已重置，该账号需要重新登录");
+    }
+    if (role) {
+      const user = usersCache.find(u => u.id === Number(role.dataset.role));
+      await api(`/api/admin/users/${user.id}`, {
+        method: "PUT",
+        body: JSON.stringify({role: user.role === "admin" ? "member" : "admin"})});
+      setStatus("user-status", "角色已更新");
+      await loadUsers();
+    }
+    if (remove) {
+      if (!confirm("确定删除该账号？")) return;
+      await api(`/api/admin/users/${remove.dataset.remove}`, {method: "DELETE"});
+      setStatus("user-status", "已删除");
+      await loadUsers();
+    }
+  } catch (err) { setStatus("user-status", err.message, true); }
+});
+$("user-create").addEventListener("click", async () => {
+  try {
+    await api("/api/admin/users", {method: "POST", body: JSON.stringify({
+      username: $("user-username").value.trim(),
+      display_name: $("user-display").value.trim(),
+      password: $("user-password").value,
+      role: $("user-role").value
+    })});
+    ["user-username", "user-display", "user-password"].forEach(id => $(id).value = "");
+    setStatus("user-status", "账号已创建");
+    await loadUsers();
+  } catch (err) { setStatus("user-status", err.message, true); }
+});
+$("pw-save").addEventListener("click", async () => {
+  try {
+    await api("/api/admin/password", {method: "POST", body: JSON.stringify({
+      old_password: $("pw-old").value, new_password: $("pw-new").value
+    })});
+    alert("密码已更新，请使用新密码重新登录");
+    location.href = "/login";
+  } catch (err) { setStatus("pw-status", err.message, true); }
+});
+
 loadSettings().catch(err => setStatus("llm-status", err.message, true));
 loadMeetings().catch(() => {});
+loadUsers().catch(err => setStatus("user-status", err.message, true));
 </script>
 {% endblock %}

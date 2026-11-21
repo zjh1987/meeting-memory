@@ -13,6 +13,7 @@ from app.providers.errors import ProviderError
 from app.pipeline import archive
 from app.services import meetings as meeting_service
 from app.services import settings as settings_service
+from app.services import users as user_service
 from app.storage import db
 
 router = APIRouter(prefix="/api/admin")
@@ -280,3 +281,71 @@ def delete_meeting(uid: str, request: Request):
 def rebuild_archives(request: Request):
     count = archive.rebuild_all(request.app.state.cfg)
     return {"ok": True, "count": count}
+
+
+@router.get("/users")
+def list_users(request: Request):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        items = user_service.list_users(conn)
+    finally:
+        conn.close()
+    return {"items": items, "current": request.state.user["id"],
+            "roles": sorted(user_service.ROLES)}
+
+
+@router.post("/users")
+def create_user(request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        user = user_service.create_user(conn, payload)
+    except ValueError as exc:
+        raise ApiError(400, "invalid_user", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True, "user": user}
+
+
+@router.put("/users/{user_id}")
+def update_user(user_id: int, request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        user = user_service.update_user(conn, user_id, payload)
+    except LookupError as exc:
+        raise ApiError(404, "not_found", str(exc)) from exc
+    except ValueError as exc:
+        raise ApiError(400, "invalid_user", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True, "user": user}
+
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, request: Request):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        user_service.delete_user(conn, user_id, request.state.user["id"])
+    except LookupError as exc:
+        raise ApiError(404, "not_found", str(exc)) from exc
+    except ValueError as exc:
+        raise ApiError(400, "invalid_user", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+@router.post("/password")
+def change_password(request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        user_service.change_password(
+            conn, request.state.user["id"],
+            str(payload.get("old_password", "")),
+            str(payload.get("new_password", "")))
+    except LookupError as exc:
+        raise ApiError(404, "not_found", str(exc)) from exc
+    except ValueError as exc:
+        raise ApiError(400, "invalid_password", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True, "relogin": True}

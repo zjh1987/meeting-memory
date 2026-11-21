@@ -113,6 +113,21 @@
   </p>
 </div>
 {% endif %}
+
+{% for section in tmpl.custom_sections %}
+{% set block = custom_minutes.get(section.key) %}
+{% if block and block.items %}
+<div class="card">
+  <h2 class="section-title">{{ section.title }}</h2>
+  {% for item in block["items"] %}
+  <div style="margin-bottom:14px">
+    <div>{{ item.text }}</div>
+    {% if item.quote %}<blockquote>{{ item.quote }}</blockquote>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endfor %}
 {% endif %}
 
 {% if relations %}

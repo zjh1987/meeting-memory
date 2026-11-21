@@ -63,3 +63,39 @@ def test_merge_parts_dedupes():
             "decisions": [], "actions": [], "open_issues": [], "people": []}
     merged = minutes.merge_parts([part, part])
     assert len(merged["topics"]) == 1
+
+
+def test_custom_sections_and_glossary_are_supported():
+    data = {
+        "summary": "会议。", "topics": [{"title": "进度", "points": [], "segment_ids": [0]}],
+        "decisions": [], "actions": [], "open_issues": [], "people": [],
+        "custom_sections": [{
+            "key": "risks", "title": "风险与依赖",
+            "items": [{"text": "数据同步依赖外部排期",
+                       "quote": "数据同步还没解决", "segment_ids": [1]}],
+        }],
+    }
+    result = minutes.validate_minutes(data, 4)
+    assert result["custom_sections"][0]["title"] == "风险与依赖"
+
+    data["custom_sections"][0]["items"][0]["segment_ids"] = [99]
+    with pytest.raises(minutes.MinutesValidationError):
+        minutes.validate_minutes(data, 4)
+
+    prompt = minutes.build_user_prompt(
+        _segments(), glossary=["张敏"], custom_sections=[
+            {"key": "risks", "title": "风险与依赖",
+             "instruction": "列出风险和依赖"}])
+    assert "张敏" in prompt
+    assert "风险与依赖" in prompt
+
+
+def test_merge_parts_merges_custom_sections():
+    item = {"text": "风险一", "quote": "", "segment_ids": []}
+    part = {"summary": "A", "topics": [], "decisions": [], "actions": [],
+            "open_issues": [], "people": [],
+            "custom_sections": [{"key": "risks", "title": "风险与依赖",
+                                 "items": [item]}]}
+    merged = minutes.merge_parts([part, part])
+    assert len(merged["custom_sections"]) == 1
+    assert len(merged["custom_sections"][0]["items"]) == 1
