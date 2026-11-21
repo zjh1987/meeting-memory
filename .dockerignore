@@ -1,0 +1,16 @@
+.git
+.gitignore
+.pytest_cache
+__pycache__
+*.pyc
+data
+site
+logs
+models
+dist
+docs
+tests
+legacy
+.screenshots
+.env
+*.whl

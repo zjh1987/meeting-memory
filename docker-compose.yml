@@ -1,0 +1,30 @@
+services:
+  meeting-memory:
+    build:
+      context: .
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cu124
+        PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
+    image: meeting-memory:cu124
+    container_name: meeting-memory
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Shanghai
+      - LD_LIBRARY_PATH=/usr/local/nvidia/lib64
+    volumes:
+      - ./data:/app/data
+      - ./site:/app/site
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./config:/app/config
+      - ./.env:/app/.env:ro
+      - ./nvidia-libs:/usr/local/nvidia/lib64:ro
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
