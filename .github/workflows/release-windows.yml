@@ -1,0 +1,66 @@
+name: Release Windows Bundle
+
+# 在 GitHub 托管的 Windows 运行器上重建离线包并上传到 Release。
+# 适合本地上行带宽不足、无法直接上传数 GB 资产的场景。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 目标 Release 标签（需已存在）
+        required: true
+        default: v1.0.0
+
+permissions:
+  contents: write
+
+jobs:
+  windows-bundle:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    env:
+      PIP_NO_CACHE_DIR: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: 安装模型下载工具
+        run: |
+          python -m pip install --upgrade pip
+          pip install modelscope
+
+      - name: 下载 FunASR 模型
+        run: python deploy/download_models.py
+
+      - name: 准备 FFmpeg
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg -y --no-progress
+          }
+
+      - name: 构建离线包
+        run: python deploy/offline/build_bundle.py --zip
+
+      - name: 分卷
+        shell: bash
+        run: |
+          rm -rf models dist/meeting-memory-offline-windows-x64
+          python deploy/offline/split_zip.py dist/meeting-memory-offline-windows-x64.zip
+          ls -lh dist
+
+      - name: 生成校验并上传
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          gh release download "${{ inputs.tag }}" \
+            -p meeting-memory-docker-v1.0.0.zip -D . --clobber
+          sha256sum meeting-memory-offline-windows-x64.zip.part* \
+            meeting-memory-docker-v1.0.0.zip > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "${{ inputs.tag }}" \
+            meeting-memory-offline-windows-x64.zip.part* SHA256SUMS --clobber
