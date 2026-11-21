@@ -52,6 +52,8 @@ cp .env.example .env
 # 编辑 .env，至少设置 APP_PASSWORD；真实转写需设置 ASR_BACKEND=funasr
 
 # 下载 FunASR 模型到 ./models/funasr（约 1.2 GB）
+# 宿主机没有 Python 时，可在任意能上网的机器下载后把整个 models/funasr 拷过来
+pip install modelscope
 python deploy/download_models.py
 
 docker compose up -d --build
