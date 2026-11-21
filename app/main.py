@@ -54,7 +54,8 @@ def create_app(cfg: Config | None = None, start_threads: bool = True) -> FastAPI
     @app.middleware("http")
     async def auth_guard(request: Request, call_next):
         path = request.url.path
-        if path in {"/login", "/healthz"} or path.startswith("/static/"):
+        if path in {"/login", "/reset-help", "/healthz"} \
+                or path.startswith("/static/"):
             return await call_next(request)
         claims = read_token(cfg.cookie_secret,
                             request.cookies.get(COOKIE_NAME))

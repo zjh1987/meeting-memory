@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}重置密码 · 会议记忆{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="card login-card">
+    <h1 style="font-size:26px">重置密码</h1>
+    <p class="muted">出于安全考虑，系统不通过网页自助重置密码。</p>
+
+    <h3 style="font-size:15px;margin:20px 0 8px">普通成员</h3>
+    <p class="muted" style="margin:0 0 16px">
+      请联系管理员，在管理后台「权限」页为你重置密码。重置后旧登录状态会立即失效。
+    </p>
+
+    <h3 style="font-size:15px;margin:0 0 8px">管理员忘记密码</h3>
+    <p class="muted" style="margin:0 0 8px">
+      登录部署服务器，在项目目录执行以下命令，按提示输入新密码：
+    </p>
+    <pre class="input" style="white-space:pre-wrap;font-size:12px;margin:0 0 10px">python deploy/reset_password.py admin</pre>
+    <p class="muted" style="margin:0 0 16px">
+      也可指定账号：<code>python deploy/reset_password.py &lt;账号&gt;</code>。
+      该命令会同时让此账号的所有已登录会话失效。
+    </p>
+
+    <a class="btn" href="/login" style="width:100%"
+       data-tip="返回登录页">返回登录</a>
+  </div>
+</div>
+{% endblock %}

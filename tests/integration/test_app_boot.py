@@ -25,6 +25,17 @@ def test_api_returns_401_json(cfg):
         assert resp.json()["error"]["code"] == "unauthorized"
 
 
+def test_login_page_links_to_reset_help(cfg):
+    app = create_app(cfg, start_threads=False)
+    with TestClient(app) as client:
+        login = client.get("/login")
+        assert "忘记密码" in login.text
+        help_page = client.get("/reset-help")
+        assert help_page.status_code == 200
+        assert "重置密码" in help_page.text
+        assert "reset_password.py" in help_page.text
+
+
 def test_login_success_and_logout(cfg):
     app = create_app(cfg, start_threads=False)
     with TestClient(app) as client:

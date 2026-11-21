@@ -71,6 +71,12 @@ def login_page(request: Request):
                          username="")
 
 
+@router.get("/reset-help", response_class=HTMLResponse)
+def reset_help(request: Request):
+    from app.web import render
+    return render.render("reset_help.html", standalone=True, user=None)
+
+
 @router.post("/login")
 def login_submit(request: Request, username: str = Form("admin"),
                  password: str = Form("")):
