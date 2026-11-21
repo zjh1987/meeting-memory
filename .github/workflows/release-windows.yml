@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 180
     env:
       PIP_NO_CACHE_DIR: "1"
+      PYTHONIOENCODING: "utf-8"
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
 
