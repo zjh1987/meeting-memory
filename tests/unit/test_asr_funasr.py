@@ -23,6 +23,7 @@ def _prepare_dirs(cfg):
 def test_parses_sentence_info_and_speakers(cfg, monkeypatch, tmp_path):
     _prepare_dirs(cfg)
     calls = {}
+    built = []
 
     class FakeModel:
         def generate(self, **kwargs):
@@ -32,8 +33,12 @@ def test_parses_sentence_info_and_speakers(cfg, monkeypatch, tmp_path):
                 {"start": 1500, "end": 3200, "spk": 1, "text": "第二句。"},
             ]}]
 
+    def fake_auto_model(**kwargs):
+        built.append(kwargs)
+        return FakeModel()
+
     fake_module = types.ModuleType("funasr")
-    fake_module.AutoModel = lambda **kwargs: FakeModel()
+    fake_module.AutoModel = fake_auto_model
     monkeypatch.setitem(sys.modules, "funasr", fake_module)
 
     provider = FunAsrProvider(replace(cfg, asr_backend="funasr"))
@@ -43,6 +48,7 @@ def test_parses_sentence_info_and_speakers(cfg, monkeypatch, tmp_path):
     assert segments[1]["start"] == 1.5
     assert segments[1]["end"] == 3.2
     assert calls["input"].endswith("a.wav")
+    assert built[0]["spk_kwargs"] == {"cb_kwargs": {"merge_thr": 0.75}}
 
 
 def test_model_is_cached_across_providers(cfg, monkeypatch, tmp_path):

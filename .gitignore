@@ -6,6 +6,7 @@ data/
 site/
 logs/
 models/
+dist/
 .screenshots/
 legacy/data/
 legacy/site/

@@ -1,4 +1,6 @@
-funasr>=1.1
-torch
-torchaudio
-modelscope
+funasr==1.4.27
+torch==2.5.1
+torchaudio==2.5.1
+modelscope==1.40.3
+# funasr 默认会拉到 transformers 5.x，它要求 torch>=2.6，会禁用 PyTorch 集成
+transformers==4.46.3

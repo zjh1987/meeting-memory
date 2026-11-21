@@ -12,8 +12,8 @@ from pathlib import Path
 from app.config import Config
 from app.providers.errors import ProviderError
 
-# 模型加载很重，按 (模型目录, 设备) 复用，避免每场会议重复加载。
-_MODELS: dict[tuple[str, str], object] = {}
+# 模型加载很重，按 (模型目录, 设备, 聚类阈值) 复用，避免每场会议重复加载。
+_MODELS: dict[tuple[str, str, float], object] = {}
 
 
 def _reset_cache_for_tests() -> None:
@@ -25,6 +25,7 @@ class FunAsrProvider:
         self.model_dir = cfg.funasr_model_dir
         self.device = cfg.funasr_device
         self.hotword_file = cfg.hotword_file
+        self.speaker_threshold = cfg.speaker_threshold
         self._model = None
 
     def _load(self):
@@ -35,7 +36,7 @@ class FunAsrProvider:
         for label, path in dirs.items():
             if not path.exists():
                 raise ProviderError("asr_unavailable", f"模型目录缺失：{path}")
-        key = (str(self.model_dir), self.device)
+        key = (str(self.model_dir), self.device, self.speaker_threshold)
         model = _MODELS.get(key)
         if model is None:
             try:
@@ -50,6 +51,7 @@ class FunAsrProvider:
                 vad_model=str(dirs["vad"]),
                 punc_model=str(dirs["punc"]),
                 spk_model=str(dirs["spk"]),
+                spk_kwargs={"cb_kwargs": {"merge_thr": self.speaker_threshold}},
                 device=self.device,
                 disable_update=True,
             )
