@@ -16,7 +16,7 @@ summary(string)、topics(list)、decisions(list)、actions(list)、open_issues(l
 topics 每条：{"title": str, "points": [str], "segment_ids": [int]}。
 decisions 每条：{"text": str, "quote": str, "segment_ids": [int]}。
 actions 每条：{"owner": str, "task": str, "due": str, "quote": str, "segment_ids": [int]}。
-open_issues 每条：{"text": str, "reason": str, "segment_ids": [int]}。
+open_issues 每条：{"text": str, "reason": str, "quote": str, "segment_ids": [int]}。
 所有 decisions/actions/open_issues 必须给出逐字稿原文 quote 与对应 segment_ids；
 无法确定的信息写“待定”或“待指定”，不得编造。只输出 JSON，不要解释。"""
 
