@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+*.pyo
 .pytest_cache/
 .env
 data/
@@ -8,5 +9,10 @@ logs/
 models/
 dist/
 .screenshots/
-legacy/data/
-legacy/site/
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

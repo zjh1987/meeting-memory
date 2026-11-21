@@ -1,0 +1,14 @@
+# NVIDIA GPU 覆盖配置：在已有宿主驱动与 /dev/nvidia* 设备节点的机器上使用。
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+# 宿主导出的用户态库目录由 deploy/nas/make_nvidia_libs.sh 生成。
+services:
+  meeting-memory:
+    environment:
+      - LD_LIBRARY_PATH=/usr/local/nvidia/lib64
+    volumes:
+      - ./nvidia-libs:/usr/local/nvidia/lib64:ro
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm

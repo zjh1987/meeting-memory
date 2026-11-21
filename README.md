@@ -1,0 +1,226 @@
+# 会议记忆 · Meeting Memory
+
+内网私有化部署的会议记忆系统：把会议录音交给它，自动完成 **转写 → 分人 → 结构化纪要 → 跨会议关联 → 静态归档**。所有音频、转写与纪要都留在自己的服务器上。
+
+[![CI](https://github.com/zjh1987/meeting-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/zjh1987/meeting-memory/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/)
+
+## 功能
+
+- **两种录入方式**：网页拖拽上传，或把文件写入 `data/inbox/` 由后台自动采集（支持 `.part` 完成后改名）。
+- **本地语音识别**：FunASR `paraformer-zh` + `fsmn-vad` + `ct-punc` + `cam++`，中文转写、标点恢复与说话人分离，可跑在 CPU 或 NVIDIA GPU 上。
+- **结构化纪要**：通过 OpenAI 兼容接口调用大模型，内置常规会议、座谈交流、工作汇报、周会、项目复盘、决策评审、客户访谈等模板，支持自定义展示模块。
+- **跨会议记忆**：自动识别「上次待办未落实」与「议题重复出现」，每条关联都带原文引用，不做开放式联想。
+- **进度可视**：`接收 → 转写 → 纪要 → 关联 → 归档` 全程状态与百分比，失败原因可见、支持手动重试与自动重试一次。
+- **静态归档**：按日期生成可直接双击打开的 HTML，含当日索引页，适合长期留存。
+- **账号与权限**：管理员 / 成员两种角色，PBKDF2 密码哈希，登录限流，管理员可在后台管理账号与运行时设置。
+- **可离线演示**：ASR 与 LLM 同时使用 mock 提供者时，无需任何外部服务即可跑通全链路。
+
+## 工作流
+
+```text
+音频文件 ──► data/inbox/ 或网页上传
+              │
+              ▼
+        ┌─────────────┐    ┌──────────────┐    ┌──────────────┐
+        │  Harvester  │───►│    Worker    │───►│  Maintainer  │
+        │ 采集/落盘    │    │ 转写→纪要→关联│    │ 归档/清理     │
+        └─────────────┘    └──────────────┘    └──────────────┘
+              │                   │                   │
+              ▼                   ▼                   ▼
+          SQLite（任务队列）   结构化纪要         site/YYYY/MM/DD/
+```
+
+单进程 FastAPI + SQLite（WAL）+ 三个后台线程；会议表本身充当任务队列，用状态机条件更新避免重复处理。
+
+## 技术栈
+
+Python 3.10 · FastAPI · Jinja2 · SQLite · FunASR · PyTorch · FFmpeg · Docker
+
+## 快速开始
+
+### 方式一：Docker（推荐）
+
+需要 Docker 与 Docker Compose。首次启动前先准备配置和模型：
+
+```bash
+git clone https://github.com/zjh1987/meeting-memory.git
+cd meeting-memory
+
+cp .env.example .env
+# 编辑 .env，至少设置 APP_PASSWORD；真实转写需设置 ASR_BACKEND=funasr
+
+# 下载 FunASR 模型到 ./models/funasr（约 1.2 GB）
+python deploy/download_models.py
+
+docker compose up -d --build
+```
+
+打开 `http://<服务器IP>:8000`，使用 `admin` 与 `.env` 中的 `APP_PASSWORD` 登录。
+
+NVIDIA GPU 主机在确认 `nvidia-smi` 可用且存在 `/dev/nvidia*` 后，改用 GPU 覆盖配置：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+```
+
+> 容器 GPU 直通依赖宿主导出的用户态库目录 `./nvidia-libs`。NAS 等无官方 runtime 的环境可参考 [deploy/nas](deploy/nas) 下的脚本；若只想快速体验，可先把 `.env` 中的 `FUNASR_DEVICE` 设为 `cpu`。
+
+### 方式二：本地运行
+
+需要 Python 3.10 与 FFmpeg（真实转写时需要）。
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate    Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env    # Windows: copy .env.example .env
+# 编辑 .env
+
+python -m uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000
+```
+
+### 只想先看看效果
+
+在 `.env` 中保持：
+
+```dotenv
+ASR_BACKEND=mock
+LLM_PROVIDER=mock
+```
+
+即可不上传模型、不配置大模型，直接上传音频走完整流程（转写与纪要为示例内容）。
+
+## 配置
+
+全部配置来自环境变量或 `.env`。完整示例见 [.env.example](.env.example)。
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `APP_PASSWORD` | 空（必填） | 首次启动时创建 `admin` 账号使用的初始密码 |
+| `COOKIE_SECRET` | 由口令派生 | 登录 Cookie 签名密钥，生产建议显式设置随机值 |
+| `DATA_DIR` | `./data` | 数据目录，含 `inbox/`、`ready/`、`archive/` |
+| `SITE_DIR` | `./site` | 静态归档输出目录 |
+| `ASR_BACKEND` | `mock` | `mock` 或 `funasr` |
+| `FUNASR_MODEL_DIR` | `./models/funasr` | 模型根目录，需包含 `asr/`、`vad/`、`punc/`、`spk/` |
+| `FUNASR_DEVICE` | `cpu` | `cpu` 或 `cuda:0` |
+| `HOTWORD_FILE` | `./config/hotwords.txt` | 热词表，每行一个词 |
+| `LLM_PROVIDER` | `mock` | `mock` 或 `openai`（任意 OpenAI 兼容接口） |
+| `LLM_BASE_URL` | 空 | 例如 `https://api.deepseek.com/v1` |
+| `LLM_API_KEY` | 空 | 大模型 API Key |
+| `LLM_MODEL` | 空 | 例如 `deepseek-chat` |
+| `MAX_UPLOAD_MB` | `1024` | 单文件上传上限 |
+| `MIN_FREE_GB` | `5` | 磁盘剩余空间低于该值时暂停接收新任务 |
+| `SPEAKER_THRESHOLD` | `0.75` | 说话人聚类阈值，越高越容易拆分 |
+| `MAX_DURATION_MIN` | `360` | 单场录音最长时长（分钟），`0` 表示不限制 |
+| `SCAN_INTERVAL` | `3` | 采集目录扫描间隔（秒） |
+| `HEARTBEAT_INTERVAL` | `60` | 任务心跳间隔（秒） |
+| `ZOMBIE_TIMEOUT` | `180` | 超时未心跳视为僵尸任务的秒数 |
+| `AUTO_RETRY_MAX` | `1` | 自动重试次数 |
+| `RETRY_BACKOFF_SEC` | `30` | 重试退避秒数 |
+| `LOG_DIR` | `./logs` | 日志目录 |
+
+部分参数（ASR 后端、设备、阈值、LLM 配置等）也可以在登录后由管理员在 `/admin` 页面修改，数据库中的运行时设置优先于 `.env`。
+
+## 账号
+
+- 首次启动时自动创建管理员 `admin`，密码为 `APP_PASSWORD`。
+- 管理员可在 `/admin` 新增成员、调整角色、重置密码。
+- 忘记密码时在服务器上执行：
+
+```bash
+python deploy/reset_password.py admin
+# 或
+python deploy/reset_password.py admin --password '新密码'
+```
+
+重置后该账号所有登录会话立即失效。
+
+## 部署
+
+### 目录约定
+
+```text
+data/inbox/     待处理音频（外部设备可写入）
+data/ready/     已转码待处理
+data/archive/   原始音频归档
+data/app.db     SQLite 数据库
+site/           静态归档 HTML
+logs/           运行日志
+models/funasr/  ASR 模型
+config/         热词与配置
+deploy/         部署脚本（systemd / Nginx / NAS / 离线包）
+```
+
+### Linux systemd + Nginx
+
+```bash
+sudo cp deploy/systemd/mm.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mm
+
+sudo cp deploy/nginx/mm.conf /etc/nginx/conf.d/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+`mm.service` 默认使用 `/opt/meeting-memory` 与 `mm` 用户，按实际路径和用户修改。Nginx 示例同时限制 `/site/` 仅内网访问。
+
+### NAS / NVIDIA GPU
+
+`deploy/nas/` 提供了在 Debian 系 NAS 上启用 NVIDIA 显卡的经验脚本：
+
+- `install_nvidia_userspace.sh`：仅安装与内核模块版本一致的用户态驱动，不动内核模块、DRM 与 OpenGL。
+- `make_nvidia_libs.sh`：导出容器所需的 `libcuda` / `libnvidia*` 到 `nvidia-libs/`。
+- `install_boot_unit.sh`：开机创建 `/dev/nvidia*` 设备节点，避免重启后容器起不来。
+- `run_build.sh`：后台构建镜像并写日志。
+
+脚本中的 `/vol1/meeting-memory` 等路径需按你的环境修改。不同 NAS 发行版的驱动来源差异较大，执行前请确认内核模块版本与驱动版本严格一致。
+
+### 内网离线安装包
+
+在能上网的准备机上构建包含全部 Python 轮子与模型的离线包：
+
+```bash
+python deploy/offline/build_bundle.py --zip
+```
+
+产物在 `dist/meeting-memory-offline-<平台>/`，拷入内网后执行 `install.ps1`（Windows）或 `install.sh`（Linux）。详见 [deploy/offline/README.md](deploy/offline/README.md)。
+
+## 开发与测试
+
+测试使用 mock 提供者，不需要 GPU、模型或大模型接口：
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+代码结构：
+
+```text
+app/
+  api/          HTTP 路由（认证、上传、会议、项目、后台）
+  core/         状态机、相似度、日志
+  pipeline/     采集、转写、纪要、关联、归档、后台线程
+  providers/    ASR / LLM 提供者接口与 mock、FunASR、OpenAI 实现
+  services/     概览、会议、设置、账号
+  storage/      SQLite 连接、迁移与仓储
+  web/          Jinja2 模板与渲染
+```
+
+## 安全说明
+
+- 本项目面向**内网私有化部署**，默认不提供 HTTPS、多租户隔离与公网防护。请勿直接暴露到公网；如需公网访问，请置于反向代理与身份认证之后。
+- `.env`、`data/`、`site/`、`logs/`、`models/` 均已在 `.gitignore` 中排除，请勿把它们提交到仓库。
+- 大模型 API Key 只保存在 `.env` 或本地数据库设置中，不会下发到浏览器。
+- 发现安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，不要开公开 Issue。
+
+## 参与贡献
+
+欢迎提交 Issue 与 Pull Request，请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 许可证
+
+[MIT](LICENSE)

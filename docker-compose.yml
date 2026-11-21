@@ -14,7 +14,6 @@ services:
       - .env
     environment:
       - TZ=Asia/Shanghai
-      - LD_LIBRARY_PATH=/usr/local/nvidia/lib64
     volumes:
       - ./data:/app/data
       - ./site:/app/site
@@ -22,9 +21,3 @@ services:
       - ./models:/app/models
       - ./config:/app/config
       - ./.env:/app/.env:ro
-      - ./nvidia-libs:/usr/local/nvidia/lib64:ro
-      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
-    devices:
-      - /dev/nvidia0:/dev/nvidia0
-      - /dev/nvidiactl:/dev/nvidiactl
-      - /dev/nvidia-uvm:/dev/nvidia-uvm
