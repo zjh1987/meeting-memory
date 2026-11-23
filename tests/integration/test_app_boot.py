@@ -48,6 +48,20 @@ def test_login_success_and_logout(cfg):
         assert client.get("/api/meetings").status_code == 401
 
 
+def test_mobile_template_and_profile_api(cfg):
+    app = create_app(cfg, start_threads=False)
+    with TestClient(app) as client:
+        assert client.get("/api/templates").status_code == 401
+        client.post("/login", data={"username": "admin", "password": "test-pass"},
+                    follow_redirects=False)
+        templates = client.get("/api/templates").json()["items"]
+        keys = {item["key"] for item in templates}
+        assert {"standard", "weekly", "project_review", "interview"} <= keys
+        profile = client.get("/api/me").json()
+        assert profile["username"] == "admin"
+        assert profile["role"] == "admin"
+
+
 def test_login_rate_limited(cfg):
     app = create_app(cfg, start_threads=False)
     with TestClient(app) as client:

@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
@@ -17,6 +18,7 @@ def upload(
     title: str = Form(""),
     project_name: str = Form(""),
     template_key: str = Form("standard"),
+    recorded_at: str = Form(""),
 ):
     cfg = request.app.state.cfg
     ext = Path(file.filename or "").suffix.lower()
@@ -25,6 +27,16 @@ def upload(
     project_name = project_name.strip()
     if not project_name:
         raise ApiError(400, "upload_invalid", "必须选择项目")
+    recorded_raw = recorded_at.strip()
+    if recorded_raw:
+        try:
+            recorded_value = datetime.strptime(
+                recorded_raw, "%Y-%m-%d %H:%M:%S"
+            ).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError as exc:
+            raise ApiError(400, "upload_invalid", "录音时间格式不正确") from exc
+    else:
+        recorded_value = meeting_repo.now_str()
     conn = db.connect(cfg.db_path)
     try:
         template_keys = {t["key"] for t in settings_service.list_templates(conn)}
@@ -38,7 +50,7 @@ def upload(
     safe_title = files.sanitize_title(title or Path(file.filename or "").stem)
     uid = files.new_uid()
     meta = {"project": project_name, "title": safe_title,
-            "recorded_at": meeting_repo.now_str()}
+            "recorded_at": recorded_value}
     try:
         path, size, _ = files.save_stream(
             file.file, cfg.inbox_dir, uid, safe_title, ext, meta,

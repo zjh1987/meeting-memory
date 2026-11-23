@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import admin, auth, meetings, projects, upload
+from app.api import admin, auth, meetings, projects, templates, upload
 from app.api.auth import COOKIE_NAME, read_token
 from app.api.errors import ApiError, api_error_handler
 from app.config import Config
@@ -94,6 +94,7 @@ def create_app(cfg: Config | None = None, start_threads: bool = True) -> FastAPI
     app.include_router(auth.router)
     app.include_router(upload.router)
     app.include_router(projects.router)
+    app.include_router(templates.router)
     app.include_router(meetings.router)
     app.include_router(admin.router)
     app.include_router(pages.router)

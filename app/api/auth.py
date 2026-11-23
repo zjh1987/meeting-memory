@@ -107,6 +107,13 @@ def login_submit(request: Request, username: str = Form("admin"),
     return resp
 
 
+@router.get("/api/me")
+def me(request: Request):
+    user = request.state.user
+    return {"id": user["id"], "username": user["username"],
+            "role": user["role"]}
+
+
 @router.post("/logout")
 def logout():
     resp = RedirectResponse("/login", status_code=302)

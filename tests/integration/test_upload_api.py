@@ -81,6 +81,42 @@ def test_upload_long_chinese_title_filename_within_limit(cfg):
         client.__exit__(None, None, None)
 
 
+def test_upload_accepts_recorded_at(cfg):
+    client = _client(cfg)
+    try:
+        resp = client.post(
+            "/api/meetings",
+            files={"file": ("a.wav", b"fake-bytes", "audio/wav")},
+            data={"title": "补传会议", "project_name": "项目A",
+                  "recorded_at": "2026-11-20 09:30:00"},
+        )
+        assert resp.status_code == 200
+        uid = resp.json()["uid"]
+        conn = db.connect(cfg.db_path)
+        try:
+            m = meeting_repo.get_by_uid(conn, uid)
+        finally:
+            conn.close()
+        assert m["recorded_at"] == "2026-11-20 09:30:00"
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_upload_rejects_invalid_recorded_at(cfg):
+    client = _client(cfg)
+    try:
+        resp = client.post(
+            "/api/meetings",
+            files={"file": ("a.wav", b"fake-bytes", "audio/wav")},
+            data={"project_name": "项目A", "recorded_at": "2026/11/20"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "upload_invalid"
+        assert not list(cfg.inbox_dir.iterdir())
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_projects_endpoint(cfg):
     client = _client(cfg)
     try:

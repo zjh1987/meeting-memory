@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MeetingMemory" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/navy</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">@color/orange_light</item>
+        <item name="colorOnPrimaryContainer">@color/orange</item>
+        <item name="colorSecondary">@color/teal</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorTertiary">@color/orange</item>
+        <item name="colorOnTertiary">@color/white</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text</item>
+        <item name="colorSurfaceVariant">@color/surface_alt</item>
+        <item name="colorOnSurfaceVariant">@color/text_muted</item>
+        <item name="colorOutline">@color/line</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/surface</item>
+        <item name="android:navigationBarColor">@color/navy</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+
+    <style name="Theme.MeetingMemory.Login" parent="Theme.MeetingMemory">
+        <item name="android:statusBarColor">@color/navy</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">@color/navy</item>
+    </style>
+
+    <style name="Widget.MeetingMemory.Card" parent="Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">20dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/line</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="cardBackgroundColor">@color/surface</item>
+    </style>
+
+    <style name="TextAppearance.MeetingMemory.Section" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.MeetingMemory.Caption" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textColor">@color/text_muted</item>
+    </style>
+</resources>

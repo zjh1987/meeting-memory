@@ -8,7 +8,7 @@ on:
       tag:
         description: 目标 Release 标签（需已存在）
         required: true
-        default: v1.0.0
+        default: v1.0.1
 
 permissions:
   contents: write
@@ -60,9 +60,9 @@ jobs:
         run: |
           cd dist
           gh release download "${{ inputs.tag }}" \
-            -p meeting-memory-docker-v1.0.0.zip -D . --clobber
-          sha256sum meeting-memory-offline-windows-x64.zip.part* \
-            meeting-memory-docker-v1.0.0.zip > SHA256SUMS
+            -p "meeting-memory-docker-*.zip" -p "*.apk" -D . --clobber
+          sha256sum *.apk meeting-memory-offline-windows-x64.zip.part* \
+            meeting-memory-docker-*.zip > SHA256SUMS
           cat SHA256SUMS
           gh release upload "${{ inputs.tag }}" \
             meeting-memory-offline-windows-x64.zip.part* SHA256SUMS --clobber

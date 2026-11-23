@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">会议记忆</string>
+    <string name="tab_record">录音</string>
+    <string name="tab_meetings">会议</string>
+    <string name="tab_web">管理</string>
+    <string name="tab_settings">我的</string>
+
+    <string name="login_title">把会议，变成可追溯的记忆</string>
+    <string name="login_subtitle">手机录音 · 自动上传 · 本地生成纪要</string>
+    <string name="server_url">服务器地址</string>
+    <string name="server_hint">例如 http://192.168.110.14:8000</string>
+    <string name="username">账号</string>
+    <string name="password">密码</string>
+    <string name="trust_self_signed">信任自签证书（仅内网 HTTPS 需要）</string>
+    <string name="test_connection">测试连接</string>
+    <string name="login_action">登录并开始</string>
+    <string name="login_footer">音频与纪要保存在你自己的服务器；默认只有转写文本会发送给大模型生成纪要。</string>
+
+    <string name="record_title">会议录音</string>
+    <string name="record_subtitle">停止后自动上传并生成结构化纪要</string>
+    <string name="meeting_title_label">会议主题（可选）</string>
+    <string name="meeting_title_hint">留空自动按时间命名</string>
+    <string name="project_label">项目</string>
+    <string name="project_hint">选择或输入新项目</string>
+    <string name="template_label">纪要模板</string>
+    <string name="start_record">开始录音</string>
+    <string name="stop_record">结束并保存</string>
+    <string name="pause">暂停</string>
+    <string name="resume">继续</string>
+    <string name="idle_hint">点击按钮开始录音，锁屏后仍会继续</string>
+    <string name="recording_hint">正在录音，尽量把手机放在桌面中央</string>
+    <string name="paused_hint">已暂停，点击“继续”恢复录音</string>
+    <string name="local_recordings">本机录音</string>
+    <string name="local_empty">还没有本机录音。第一次录音会出现在这里。</string>
+
+    <string name="meetings_title">会议</string>
+    <string name="meetings_subtitle">服务器上的全部会议与纪要</string>
+    <string name="filter_all">全部</string>
+    <string name="filter_done">已完成</string>
+    <string name="filter_failed">失败</string>
+    <string name="all_projects">全部项目</string>
+    <string name="empty_meetings">还没有会议。去“录音”页录一场吧。</string>
+
+    <string name="web_title">完整管理界面</string>
+    <string name="web_subtitle">概览、上传、纪要详情与后台设置</string>
+
+    <string name="settings_title">我的</string>
+    <string name="account_section">账号与服务器</string>
+    <string name="record_section">录音与上传</string>
+    <string name="background_section">后台运行</string>
+    <string name="security_section">安全</string>
+    <string name="about_section">关于</string>
+    <string name="auto_upload">停止后自动上传</string>
+    <string name="auto_upload_desc">录音结束立即进入上传队列</string>
+    <string name="wifi_only">仅 Wi-Fi 上传</string>
+    <string name="wifi_only_desc">避免使用移动流量上传长录音</string>
+    <string name="max_minutes">单场最长录音（分钟）</string>
+    <string name="max_minutes_desc">到达时长后自动停止并保存，0 表示不限制（建议不超过 480 分钟）</string>
+    <string name="keep_days">本机保留天数</string>
+    <string name="keep_days_desc">已生成纪要的录音超过天数后自动清理，0 表示永久保留</string>
+    <string name="self_signed">允许自签证书</string>
+    <string name="self_signed_desc">仅在服务器使用自签 HTTPS 证书时开启</string>
+    <string name="relogin">重新登录</string>
+    <string name="logout">退出登录</string>
+    <string name="test">测试连接</string>
+    <string name="battery_guide">电池优化设置</string>
+    <string name="battery_guide_desc">关闭对本应用的后台限制，避免长录音被系统中断</string>
+    <string name="notification_permission">通知权限</string>
+    <string name="notification_permission_desc">录音与上传进度会通过通知展示</string>
+    <string name="about_version">版本</string>
+    <string name="about_boundary">数据边界：音频、模型、数据库和归档都在你的服务器上；纪要默认由外部大模型生成，只发送转写文本。可在服务器后台切换内网模型。</string>
+
+    <string name="action_play">播放</string>
+    <string name="action_stop_play">停止播放</string>
+    <string name="action_upload">上传</string>
+    <string name="action_more">更多操作</string>
+    <string name="action_rename">重命名</string>
+    <string name="action_share">分享音频</string>
+    <string name="action_delete">删除</string>
+    <string name="action_open">查看纪要</string>
+    <string name="cancel">取消</string>
+    <string name="confirm">确定</string>
+    <string name="delete_title">删除本机录音？</string>
+    <string name="delete_msg">音频文件会从手机删除。</string>
+    <string name="delete_msg_uploaded">该录音已上传，删除本机文件不会影响服务器上的会议与纪要。</string>
+    <string name="rename_title">重命名录音</string>
+    <string name="upload_now">立即上传</string>
+    <string name="retry">重试</string>
+</resources>

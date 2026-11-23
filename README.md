@@ -34,6 +34,33 @@
 
 单进程 FastAPI + SQLite（WAL）+ 三个后台线程；会议表本身充当任务队列，用状态机条件更新避免重复处理。
 
+## Android 客户端
+
+手机端录音终端位于 [`android/`](android/)，支持：
+
+- 前台服务长录音：暂停/继续、锁屏继续、来电自动暂停、到达时长自动保存
+- 停止后自动上传；WorkManager 断网重试、仅 Wi-Fi 上传、失败队列
+- 16 kHz WAV 直接落盘，进程被系统回收后可修复文件头并恢复录音
+- 本机录音播放、重命名、分享、删除，以及服务器转写/纪要状态跟踪
+- 内嵌完整 Web 管理界面：概览、会议、上传、后台与静态归档
+- 会话 Cookie 加密保存；支持内网自签 HTTPS 证书
+- 通知栏控制录音，纪要生成完成与上传失败都会提醒
+
+安装包位于 `dist/会议记忆-Android-v1.0.1.apk`（二进制不入库），支持 Android 8.0 及以上。首次打开填写服务器地址（如 `http://192.168.110.14:8000`）和账号即可。
+
+自行构建需要 JDK 17 与 Android SDK 34：
+
+```bash
+cd android
+./gradlew assembleRelease     # 需要 keystore.properties；否则可用 assembleDebug
+```
+
+签名配置放在 `android/keystore.properties`（已加入 `.gitignore`）。录音约 115 MB/小时，默认单场最长 360 分钟、仅 Wi-Fi 上传，可在 App“我的”中调整；服务器侧上限由 `MAX_UPLOAD_MB` 控制。
+
+### 长录音与转写失败
+
+超长会议（超过 2048 个语音片段）会走 FunASR 的 UMAP 说话人聚类分支。服务端已加入 CUDA/NumPy 兼容修复，并在聚类异常时降级为单一说话人，保证逐字稿和纪要仍能生成。会议详情页在失败时会显示可读原因和“技术详情”，原始音频保留在服务器，可直接点“重试处理”；如果提示超过时长上限，请缩短录音或调大 `MAX_DURATION_MIN`。
+
 ## 技术栈
 
 Python 3.10 · FastAPI · Jinja2 · SQLite · FunASR · PyTorch · FFmpeg · Docker
