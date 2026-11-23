@@ -24,3 +24,19 @@ def test_warn_orphan_ready_only_reports_unknown_old_files(cfg, conn):
 
     assert maintainer.warn_orphan_ready(cfg, now=now) == 1
     assert orphan.exists()
+
+
+def test_cleanup_transcode_cache_only_removes_stale_files(cfg):
+    old = cfg.ready_dir / "old.16k.wav"
+    fresh = cfg.ready_dir / "fresh.16k.wav"
+    normal = cfg.ready_dir / "old.16k.mp3"
+    for path in (old, fresh, normal):
+        path.write_bytes(b"x")
+    stale = datetime.now().timestamp() - 7200
+    os.utime(old, (stale, stale))
+    os.utime(normal, (stale, stale))
+
+    assert maintainer.cleanup_transcode_cache(cfg) == 1
+    assert not old.exists()
+    assert fresh.exists()
+    assert normal.exists()

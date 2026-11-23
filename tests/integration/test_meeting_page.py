@@ -57,6 +57,28 @@ def test_meeting_page_404(cfg):
         client.__exit__(None, None, None)
 
 
+def test_failed_meeting_shows_actionable_reason(cfg):
+    mid = _seed(cfg, status="failed")
+    conn = db.connect(cfg.db_path)
+    try:
+        meeting_repo.update_fields(
+            conn, mid, error_code="asr_unavailable",
+            error_msg="FunASR 识别失败：Cannot interpret 'torch.float32' as a data type")
+    finally:
+        conn.close()
+    client = _client(cfg)
+    try:
+        html = client.get("/m/20261121-100000-abcd").text
+        assert "处理失败" in html
+        assert "说话人分离" in html
+        assert "技术详情" in html
+        assert "torch.float32" in html
+        assert "页面每 3 秒自动刷新" not in html
+        assert "setTimeout(() => location.reload(), 3000)" not in html
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_retry_moves_failed_to_pending(cfg):
     _seed(cfg, status="failed")
     client = _client(cfg)

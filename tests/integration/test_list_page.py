@@ -35,6 +35,28 @@ def test_index_lists_meeting(cfg):
         client.__exit__(None, None, None)
 
 
+def test_failed_meeting_error_visible_in_list(cfg):
+    _seed(cfg)
+    conn = db.connect(cfg.db_path)
+    try:
+        row = conn.execute(
+            "SELECT id FROM meeting WHERE uid=?",
+            ("20261121-100000-abcd",)).fetchone()
+        meeting_repo.update_fields(
+            conn, row["id"], status="failed", error_code="asr_unavailable",
+            error_msg="FunASR 识别失败：Cannot interpret 'torch.float32' as a data type")
+    finally:
+        conn.close()
+    client = _client(cfg)
+    try:
+        html = client.get("/meetings").text
+        assert "查看原因并重试" in html
+        assert "asr_unavailable" in html
+        assert "torch.float32" in html
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_status_endpoint(cfg):
     _seed(cfg)
     client = _client(cfg)

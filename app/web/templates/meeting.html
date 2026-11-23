@@ -11,7 +11,7 @@
   </div>
   <div class="actions">
     {% if can_retry and not standalone %}
-    <button class="btn ghost small" id="retry-btn"
+    <button class="btn ghost small retry-action" id="retry-btn"
             data-tip="从上次中断的阶段继续处理">重试</button>
     {% endif %}
     {% if finished and transcript and not standalone %}
@@ -34,17 +34,38 @@
       </span>
       <span class="muted" style="margin-left:8px">{{ progress }}%</span>
     </div>
-    {% if not finished %}<span class="muted">处理中，页面每 3 秒自动刷新</span>{% endif %}
+    {% if processing %}<span class="muted">处理中，页面每 3 秒自动刷新</span>{% endif %}
   </div>
-  {% if not finished %}
+  {% if processing %}
   <div class="progress stage" style="margin-top:12px" data-tip="按处理阶段估算">
     <i style="width:{{ progress }}%"></i>
   </div>
   {% endif %}
-  {% if m.error_code %}
-  <div class="error" style="margin-bottom:0">{{ m.error_code }}：{{ m.error_msg or '' }}</div>
+  {% if m.error_code and m.status != 'failed' %}
+  <div class="error" style="margin-bottom:0">
+    {{ failure_hint }}<br>
+    <span class="muted">{{ m.error_code }}：{{ m.error_msg or '' }}</span>
+  </div>
   {% endif %}
 </div>
+
+{% if m.status == 'failed' %}
+<div class="card">
+  <h2 class="section-title">处理失败</h2>
+  <p style="margin:0 0 8px">{{ failure_hint }}</p>
+  <p class="muted" style="margin:0">录音和原始音频仍保存在服务器，不需要重新上传。</p>
+  {% if can_retry %}
+  <div style="margin-top:14px">
+    <button class="btn ghost small retry-action"
+            data-tip="从失败阶段继续处理">重试处理</button>
+  </div>
+  {% endif %}
+  <details style="margin-top:12px">
+    <summary class="muted">技术详情</summary>
+    <pre style="white-space:pre-wrap;word-break:break-all;font-size:12px;color:var(--muted);margin:8px 0 0">{{ m.error_code or 'unknown' }}：{{ m.error_msg or '无错误信息' }}</pre>
+  </details>
+</div>
+{% endif %}
 
 {% if minutes %}
 {% if 'summary' in tmpl.sections %}
@@ -165,14 +186,14 @@
 {% endif %}
 
 <script>
-const retryBtn = document.getElementById("retry-btn");
-if (retryBtn) {
-  retryBtn.addEventListener("click", async () => {
+const retryButtons = document.querySelectorAll(".retry-action");
+retryButtons.forEach(button => {
+  button.addEventListener("click", async () => {
     const resp = await fetch("/api/meetings/{{ m.uid }}/retry", {method: "POST"});
     if (resp.ok) location.reload();
     else alert("当前状态不允许重试");
   });
-}
+});
 const regenBtn = document.getElementById("regen-btn");
 if (regenBtn) {
   regenBtn.addEventListener("click", async () => {
@@ -208,6 +229,6 @@ if (search) {
     empty.classList.toggle("hidden", visible > 0);
   });
 }
-{% if not finished %}setTimeout(() => location.reload(), 3000);{% endif %}
+{% if processing %}setTimeout(() => location.reload(), 3000);{% endif %}
 </script>
 {% endblock %}

@@ -52,6 +52,12 @@
       </a>
       <div class="meta">{{ m.recorded_at }} · {{ m.project_name }} · {{ m.duration_sec|mmss }}
         · 待办 {{ m.open_actions }}</div>
+      {% if m.status == 'failed' and (m.error_code or m.error_msg) %}
+      <div class="error" style="margin-top:4px">
+        {{ m.error_code or 'failed' }}：{{ (m.error_msg or '')|truncate(90, true, '…') }}
+        · <a href="/m/{{ m.uid }}">查看原因并重试</a>
+      </div>
+      {% endif %}
     </div>
     <div class="side">
       <span class="chip {% if m.status == 'done' %}done{% elif m.status == 'failed' %}failed{% else %}processing{% endif %}"

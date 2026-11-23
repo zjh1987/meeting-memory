@@ -78,6 +78,23 @@ def cleanup_parts(cfg: Config, now_ts: float | None = None) -> int:
     return removed
 
 
+def cleanup_transcode_cache(cfg: Config, now_ts: float | None = None) -> int:
+    """清理异常退出后残留的 16k 转码临时文件。"""
+    moment = time.time() if now_ts is None else now_ts
+    cutoff = moment - 3600
+    removed = 0
+    if not cfg.ready_dir.is_dir():
+        return removed
+    for path in cfg.ready_dir.glob("*.16k.wav"):
+        try:
+            if path.is_file() and path.stat().st_mtime < cutoff:
+                path.unlink(missing_ok=True)
+                removed += 1
+        except OSError:
+            continue
+    return removed
+
+
 def warn_orphan_ready(cfg: Config, now: datetime | None = None) -> int:
     """记录 ready/ 中超过 24 小时且无数据库记录的孤儿文件。"""
     moment = now or datetime.now()
@@ -112,6 +129,7 @@ def start(cfg: Config, stop: threading.Event) -> threading.Thread:
                 reclaim_zombies(cfg)
                 fail_stale_uploads(cfg)
                 cleanup_parts(cfg)
+                cleanup_transcode_cache(cfg)
                 warn_orphan_ready(cfg)
             except Exception:
                 traceback.print_exc()

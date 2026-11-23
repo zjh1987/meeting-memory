@@ -8,16 +8,71 @@
 """
 
 from pathlib import Path
+import traceback
+
+import numpy as np
 
 from app.config import Config
 from app.providers.errors import ProviderError
 
 # 模型加载很重，按 (模型目录, 设备, 聚类阈值) 复用，避免每场会议重复加载。
 _MODELS: dict[tuple[str, str, float], object] = {}
+_CLUSTER_PATCHED = False
+
+
+def _patch_cluster_backend() -> None:
+    """FunASR 长音频说话人聚类的兼容补丁。
+
+    超过 2048 个 VAD 片段时，FunASR 会走 UMAP/HDBSCAN 分支，并把 CUDA
+    tensor 直接交给 NumPy/UMAP，触发
+    ``Cannot interpret 'torch.float32' as a data type``。
+    这里在进入聚类前统一转成 CPU NumPy，不改动 site-packages。
+    """
+    global _CLUSTER_PATCHED
+    if _CLUSTER_PATCHED:
+        return
+    try:
+        from funasr.models.campplus import cluster_backend
+    except Exception:
+        return
+
+    original = cluster_backend.ClusterBackend.forward
+    if getattr(original, "_meeting_memory_numpy", False):
+        _CLUSTER_PATCHED = True
+        return
+
+    def forward(self, X, **params):
+        if hasattr(X, "detach") and hasattr(X, "cpu"):
+            X = X.detach().cpu().numpy()
+        try:
+            return original(self, X, **params)
+        except Exception:
+            # 聚类失败不应让整场转写失败；降级为单一说话人，保留逐字稿。
+            traceback.print_exc()
+            return np.zeros(len(X), dtype=int)
+
+    forward._meeting_memory_numpy = True
+    cluster_backend.ClusterBackend.forward = forward
+    _CLUSTER_PATCHED = True
+
+
+def _friendly_error(exc: Exception) -> str:
+    text = str(exc)
+    lower = text.lower()
+    if "torch.float32" in text or "can't convert cuda" in lower:
+        return ("长录音的说话人分离阶段失败：FunASR 与当前 NumPy/Torch "
+                "版本不兼容。录音已保留，服务端升级后可直接重试。")
+    if "out of memory" in lower or "显存" in text:
+        return "GPU 显存不足。建议缩短单场录音，或升级显卡后重试。"
+    if "no module named" in lower or "not found" in lower:
+        return "ASR 模型或依赖缺失，请检查模型目录与服务端日志。"
+    return f"FunASR 识别失败：{text}"
 
 
 def _reset_cache_for_tests() -> None:
+    global _CLUSTER_PATCHED
     _MODELS.clear()
+    _CLUSTER_PATCHED = False
 
 
 class FunAsrProvider:
@@ -33,6 +88,7 @@ class FunAsrProvider:
     def _load(self):
         if self._model is not None:
             return self._model
+        _patch_cluster_backend()
         dirs = {name: self.model_dir / name
                 for name in ("asr", "vad", "punc", "spk")}
         for label, path in dirs.items():
@@ -78,8 +134,9 @@ class FunAsrProvider:
                 sentence_timestamp=True,
             )
         except Exception as exc:
+            traceback.print_exc()
             raise ProviderError("asr_unavailable",
-                                f"FunASR 识别失败：{exc}", transient=True) from exc
+                                _friendly_error(exc), transient=True) from exc
         if not result:
             return []
 
