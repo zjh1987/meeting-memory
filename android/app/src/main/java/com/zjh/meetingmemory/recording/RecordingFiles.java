@@ -47,6 +47,22 @@ public final class RecordingFiles {
         return file;
     }
 
+    public static File newImportedFile(Context context, String extension) {
+        String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.CHINA)
+                .format(new Date());
+        String ext = extension == null || extension.isEmpty() ? ".audio" : extension;
+        if (!ext.startsWith(".")) {
+            ext = "." + ext;
+        }
+        File file = new File(dir(context), "import_" + stamp + ext);
+        int index = 1;
+        while (file.exists()) {
+            file = new File(dir(context), "import_" + stamp + "_" + index + ext);
+            index++;
+        }
+        return file;
+    }
+
     public static void recoverOrphans(Context context) {
         File folder = dir(context);
         File[] files = folder.listFiles((directory, name) -> name.endsWith(".wav"));

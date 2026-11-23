@@ -58,9 +58,11 @@ public class WebFragment extends Fragment {
                             uris = new Uri[count];
                             for (int i = 0; i < count; i++) {
                                 uris[i] = data.getClipData().getItemAt(i).getUri();
+                                persistRead(uris[i]);
                             }
                         } else if (data.getData() != null) {
                             uris = new Uri[]{data.getData()};
+                            persistRead(uris[0]);
                         }
                     }
                     fileCallback.onReceiveValue(uris);
@@ -133,20 +135,16 @@ public class WebFragment extends Fragment {
                     fileCallback.onReceiveValue(null);
                 }
                 fileCallback = callback;
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                // 很多录音 App 的文件 MIME 并不规范，用 */* 让系统文件选择器
+                // 一定能浏览到“录音”“下载”等目录，格式由服务端最终校验。
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
-                String[] accept = params.getAcceptTypes();
-                if (accept != null && accept.length > 0 && !accept[0].isEmpty()) {
-                    intent.setType(accept[0]);
-                    intent.putExtra(Intent.EXTRA_MIME_TYPES, accept);
-                } else {
-                    intent.setType("*/*");
-                }
+                intent.setType("*/*");
                 if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) {
                     intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 }
                 try {
-                    fileChooser.launch(Intent.createChooser(intent, "选择文件"));
+                    fileChooser.launch(Intent.createChooser(intent, "选择录音文件"));
                     return true;
                 } catch (Exception e) {
                     fileCallback = null;
@@ -200,6 +198,17 @@ public class WebFragment extends Fragment {
             }
         });
         binding.webView.setOnLongClickListener(v -> false);
+    }
+
+    private void persistRead(Uri uri) {
+        if (uri == null || getContext() == null) {
+            return;
+        }
+        try {
+            getContext().getContentResolver().takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Exception ignored) {
+        }
     }
 
     private void loadPath(String path, boolean showChip) {

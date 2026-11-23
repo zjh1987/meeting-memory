@@ -154,7 +154,7 @@ public class AppPrefs {
     }
 
     public String lastTemplate() {
-        return prefs.getString("last_template", "standard");
+        return prefs.getString("last_template", "");
     }
 
     public void setLastTemplate(String value) {

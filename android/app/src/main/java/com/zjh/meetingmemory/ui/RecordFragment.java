@@ -27,12 +27,14 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textfield.TextInputLayout;
 import com.zjh.meetingmemory.R;
 import com.zjh.meetingmemory.core.ApiClient;
 import com.zjh.meetingmemory.core.AppPrefs;
@@ -51,9 +53,13 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -66,6 +72,8 @@ public class RecordFragment extends Fragment {
 
     private static final long GB = 1024L * 1024 * 1024;
     private static final long MIN_FREE_BYTES = 300L * 1024 * 1024;
+    private static final List<String> AUDIO_EXTENSIONS = Arrays.asList(
+            ".m4a", ".mp3", ".wav", ".opus", ".aac", ".amr", ".flac");
 
     private FragmentRecordBinding binding;
     private AppPrefs prefs;
@@ -75,13 +83,16 @@ public class RecordFragment extends Fragment {
     private RecordingAdapter adapter;
 
     private final List<Models.Project> projects = new ArrayList<>();
+    private final List<String> projectNames = new ArrayList<>();
     private final List<Models.Template> templates = new ArrayList<>();
     private String templateKey = "standard";
     private String templateName = "常规会议";
 
     private ActivityResultLauncher<String> recordPermission;
     private ActivityResultLauncher<String> notificationPermission;
+    private ActivityResultLauncher<String[]> importAudioLauncher;
     private boolean pendingAfterPermission;
+    private boolean importing;
 
     private MediaPlayer player;
     private long playingId = -1;
@@ -125,6 +136,12 @@ public class RecordFragment extends Fragment {
                 });
         notificationPermission = registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(), granted -> {
+                });
+        importAudioLauncher = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(), uri -> {
+                    if (uri != null) {
+                        importAudio(uri);
+                    }
                 });
     }
 
@@ -178,6 +195,11 @@ public class RecordFragment extends Fragment {
             }
         });
         binding.btnStop.setOnClickListener(view13 -> confirmStop());
+        binding.btnImport.setOnClickListener(view14 -> {
+            if (!importing) {
+                importAudioLauncher.launch(new String[]{"*/*"});
+            }
+        });
 
         loadCachedData();
         refreshFromServer();
@@ -187,13 +209,19 @@ public class RecordFragment extends Fragment {
     }
 
     private void setupProjectInput() {
-        ArrayAdapter<String> projectAdapter = new ArrayAdapter<>(requireContext(),
-                android.R.layout.simple_list_item_1, new ArrayList<>());
-        binding.actProject.setAdapter(projectAdapter);
-        binding.actProject.setThreshold(0);
-        binding.actProject.setOnClickListener(v -> binding.actProject.showDropDown());
+        rebuildProjectAdapter();
+        binding.actProject.setOnClickListener(v -> {
+            if (!binding.actProject.isEnabled()) {
+                return;
+            }
+            if (projectNames.isEmpty()) {
+                showNewProjectDialog();
+            } else {
+                binding.actProject.showDropDown();
+            }
+        });
         binding.actProject.setOnFocusChangeListener((v, hasFocus) -> {
-            if (hasFocus) {
+            if (hasFocus && !projectNames.isEmpty()) {
                 binding.actProject.showDropDown();
             }
         });
@@ -201,8 +229,60 @@ public class RecordFragment extends Fragment {
             Object value = parent.getItemAtPosition(position);
             if (value != null) {
                 prefs.setLastProject(value.toString());
+                binding.tilProject.setError(null);
             }
         });
+        binding.tilProject.setEndIconOnClickListener(v -> showNewProjectDialog());
+    }
+
+    private void rebuildProjectAdapter() {
+        ArrayAdapter<String> projectAdapter = new ArrayAdapter<>(requireContext(),
+                android.R.layout.simple_list_item_1, new ArrayList<>(projectNames));
+        binding.actProject.setAdapter(projectAdapter);
+    }
+
+    private void showNewProjectDialog() {
+        if (binding == null || !binding.actProject.isEnabled()) {
+            return;
+        }
+        View content = getLayoutInflater().inflate(R.layout.dialog_new_project, null);
+        TextInputLayout til = content.findViewById(R.id.til_new_project);
+        EditText input = content.findViewById(R.id.et_new_project);
+        AlertDialog dialog = new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.new_project)
+                .setView(content)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.create, null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String name = input.getText().toString().trim();
+                if (name.isEmpty()) {
+                    til.setError(getString(R.string.new_project_empty));
+                    return;
+                }
+                til.setError(null);
+                addProject(name);
+                dialog.dismiss();
+            });
+        });
+        dialog.show();
+        input.requestFocus();
+        InputMethodManager manager = (InputMethodManager)
+                requireContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (manager != null) {
+            input.post(() -> manager.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT));
+        }
+    }
+
+    private void addProject(String name) {
+        if (!projectNames.contains(name)) {
+            projectNames.add(name);
+            rebuildProjectAdapter();
+        }
+        binding.actProject.setText(name, false);
+        prefs.setLastProject(name);
+        binding.tilProject.setError(null);
     }
 
     private void setupTemplateInput() {
@@ -349,25 +429,29 @@ public class RecordFragment extends Fragment {
         }
         projects.clear();
         projects.addAll(items);
-        List<String> names = new ArrayList<>();
+        projectNames.clear();
         for (Models.Project project : items) {
-            names.add(project.name);
+            projectNames.add(project.name);
         }
-        ArrayAdapter<String> projectAdapter = new ArrayAdapter<>(requireContext(),
-                android.R.layout.simple_list_item_1, names);
-        binding.actProject.setAdapter(projectAdapter);
+        rebuildProjectAdapter();
         String current = binding.actProject.getText().toString().trim();
-        if (current.isEmpty()) {
+        if (!current.isEmpty() && !projectNames.contains(current)) {
+            // 新建但尚未上传的项目：服务端还没有，不能把它冲掉。
+            projectNames.add(current);
+            rebuildProjectAdapter();
+            binding.actProject.setText(current, false);
+        } else if (current.isEmpty()) {
             String last = prefs.lastProject();
-            if (!last.isEmpty()) {
+            if (projectNames.contains(last)) {
                 binding.actProject.setText(last, false);
-            } else if (!names.isEmpty()) {
-                binding.actProject.setText(names.get(0), false);
-                prefs.setLastProject(names.get(0));
+            } else if (!last.isEmpty()) {
+                projectNames.add(last);
+                rebuildProjectAdapter();
+                binding.actProject.setText(last, false);
+            } else if (!projectNames.isEmpty()) {
+                binding.actProject.setText(projectNames.get(0), false);
+                prefs.setLastProject(projectNames.get(0));
             }
-        }
-        if (!fromServer) {
-            return;
         }
     }
 
@@ -392,9 +476,11 @@ public class RecordFragment extends Fragment {
 
         String wanted = prefs.lastTemplate();
         int index = 0;
+        boolean found = false;
         for (int i = 0; i < items.size(); i++) {
             if (items.get(i).key.equals(wanted)) {
                 index = i;
+                found = true;
                 break;
             }
         }
@@ -403,7 +489,171 @@ public class RecordFragment extends Fragment {
             templateKey = selected.key;
             templateName = selected.name;
             binding.actTemplate.setText(selected.name, false);
+            if (!found) {
+                prefs.setLastTemplate(selected.key);
+            }
         }
+    }
+
+    private void importAudio(Uri uri) {
+        if (binding == null) {
+            return;
+        }
+        Context app = requireContext().getApplicationContext();
+        ContentResolver resolver = app.getContentResolver();
+        try {
+            resolver.takePersistableUriPermission(uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Exception ignored) {
+        }
+        String displayName = null;
+        try (Cursor cursor = resolver.query(uri,
+                new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE},
+                null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                displayName = cursor.getString(0);
+            }
+        } catch (Exception ignored) {
+        }
+        String ext = extensionOf(displayName);
+        if (!isAudioExtension(ext)) {
+            ext = extensionFromMime(resolver.getType(uri));
+        }
+        if (!isAudioExtension(ext)) {
+            snack(getString(R.string.import_invalid));
+            return;
+        }
+        String project = binding.actProject.getText().toString().trim();
+        if (project.isEmpty()) {
+            project = "未分类";
+        }
+        String title = displayName == null ? "导入的录音" : stripExtension(displayName);
+        if (title.trim().isEmpty()) {
+            title = "导入的录音";
+        }
+        final String finalProject = project;
+        final String finalTitle = title;
+        final String finalExt = ext;
+        final String finalTemplateKey = templateKey;
+        final String finalTemplateName = templateName;
+        importing = true;
+        binding.btnImport.setEnabled(false);
+        snack(getString(R.string.importing));
+        executor.execute(() -> {
+            File dest = RecordingFiles.newImportedFile(app, finalExt);
+            try (InputStream input = resolver.openInputStream(uri);
+                 OutputStream output = new FileOutputStream(dest)) {
+                if (input == null) {
+                    throw new IOException("无法读取所选文件");
+                }
+                byte[] buffer = new byte[64 * 1024];
+                int read;
+                long total = 0;
+                while ((read = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, read);
+                    total += read;
+                }
+                if (total == 0) {
+                    throw new IOException("文件为空");
+                }
+            } catch (Exception error) {
+                //noinspection ResultOfMethodCallIgnored
+                dest.delete();
+                handler.post(() -> {
+                    importing = false;
+                    if (binding != null) {
+                        binding.btnImport.setEnabled(true);
+                        snack(getString(R.string.import_failed)
+                                + (error.getMessage() == null ? "" : error.getMessage()));
+                    }
+                });
+                return;
+            }
+            LocalRecording item = new LocalRecording();
+            item.title = finalTitle;
+            item.project = finalProject;
+            item.templateKey = finalTemplateKey;
+            item.templateName = finalTemplateName;
+            item.filePath = dest.getAbsolutePath();
+            item.startedAt = System.currentTimeMillis();
+            item.durationMs = 0;
+            item.sizeBytes = dest.length();
+            item.state = LocalRecording.READY;
+            long id;
+            try {
+                id = store.insert(item);
+            } catch (Exception error) {
+                //noinspection ResultOfMethodCallIgnored
+                dest.delete();
+                handler.post(() -> {
+                    importing = false;
+                    if (binding != null) {
+                        binding.btnImport.setEnabled(true);
+                        snack(getString(R.string.import_failed)
+                                + (error.getMessage() == null ? "" : error.getMessage()));
+                    }
+                });
+                return;
+            }
+            boolean autoUpload = prefs.autoUpload() && prefs.isConfigured();
+            if (autoUpload) {
+                UploadWorker.enqueue(app, id, false);
+            }
+            handler.post(() -> {
+                importing = false;
+                if (binding != null) {
+                    binding.btnImport.setEnabled(true);
+                    refreshLocal();
+                    snack(getString(autoUpload
+                            ? R.string.imported_uploading : R.string.imported_local));
+                }
+            });
+        });
+    }
+
+    private String extensionOf(String name) {
+        if (name == null) {
+            return "";
+        }
+        int dot = name.lastIndexOf('.');
+        return dot >= 0 ? name.substring(dot).toLowerCase(Locale.ROOT) : "";
+    }
+
+    private String extensionFromMime(String mime) {
+        if (mime == null) {
+            return "";
+        }
+        switch (mime.toLowerCase(Locale.ROOT)) {
+            case "audio/mp4":
+            case "audio/x-m4a":
+                return ".m4a";
+            case "audio/mpeg":
+                return ".mp3";
+            case "audio/wav":
+            case "audio/x-wav":
+                return ".wav";
+            case "audio/ogg":
+            case "audio/opus":
+                return ".opus";
+            case "audio/aac":
+                return ".aac";
+            case "audio/amr":
+                return ".amr";
+            case "audio/flac":
+            case "audio/x-flac":
+                return ".flac";
+            default:
+                return "";
+        }
+    }
+
+    private boolean isAudioExtension(String ext) {
+        return ext != null && AUDIO_EXTENSIONS.contains(ext);
+    }
+
+    private String stripExtension(String name) {
+        int dot = name == null ? -1 : name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : (name == null ? "" : name);
     }
 
     private void requestStart() {
@@ -413,7 +663,7 @@ public class RecordFragment extends Fragment {
         }
         String project = binding.actProject.getText().toString().trim();
         if (project.isEmpty()) {
-            binding.tilProject.setError("请选择或输入项目");
+            binding.tilProject.setError(getString(R.string.project_required));
             return;
         }
         binding.tilProject.setError(null);
@@ -437,7 +687,7 @@ public class RecordFragment extends Fragment {
         }
         String project = binding.actProject.getText().toString().trim();
         if (project.isEmpty()) {
-            binding.tilProject.setError("请选择或输入项目");
+            binding.tilProject.setError(getString(R.string.project_required));
             return;
         }
         long free = RecordingFiles.dir(requireContext()).getUsableSpace();
