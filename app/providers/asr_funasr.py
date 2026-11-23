@@ -10,8 +10,6 @@
 from pathlib import Path
 import traceback
 
-import numpy as np
-
 from app.config import Config
 from app.providers.errors import ProviderError
 
@@ -33,6 +31,7 @@ def _patch_cluster_backend() -> None:
         return
     try:
         from funasr.models.campplus import cluster_backend
+        import numpy as np
     except Exception:
         return
 
