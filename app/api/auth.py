@@ -47,6 +47,14 @@ def verify_token(secret: str, token: str | None,
     return read_token(secret, token, now_ts) is not None
 
 
+def require_admin(request: Request) -> None:
+    """敏感操作的服务端权限兜底，不能只依赖前端隐藏按钮。"""
+    user = getattr(request.state, "user", None)
+    if not user or user.get("role") != "admin":
+        from app.api.errors import ApiError
+        raise ApiError(403, "forbidden", "需要管理员权限")
+
+
 class LoginLimiter:
     def __init__(self, max_attempts: int = 5, window_sec: int = 60):
         self.max_attempts = max_attempts

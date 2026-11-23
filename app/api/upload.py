@@ -17,7 +17,7 @@ def upload(
     file: UploadFile = File(...),
     title: str = Form(""),
     project_name: str = Form(""),
-    template_key: str = Form("standard"),
+    template_key: str = Form(""),
     recorded_at: str = Form(""),
 ):
     cfg = request.app.state.cfg
@@ -40,10 +40,12 @@ def upload(
     conn = db.connect(cfg.db_path)
     try:
         template_keys = {t["key"] for t in settings_service.list_templates(conn)}
+        if not template_key:
+            template_key = settings_service.default_template_key(conn)
+        elif template_key not in template_keys:
+            raise ApiError(400, "upload_invalid", "未知的纪要模板")
     finally:
         conn.close()
-    if template_key not in template_keys:
-        raise ApiError(400, "upload_invalid", "未知的纪要模板")
     if files.free_gb(cfg.data_dir) < cfg.min_free_gb:
         raise ApiError(503, "storage_full", "服务器磁盘空间不足")
 

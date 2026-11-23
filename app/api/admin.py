@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Request
+from fastapi.responses import Response
 
 from app.api.errors import ApiError
 from app.config import Config
@@ -250,6 +251,19 @@ def delete_template(key: str, request: Request):
     return {"ok": True}
 
 
+@router.post("/templates/{key}/move")
+def move_template(key: str, request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        items = settings_service.move_template(
+            conn, key, str(payload.get("direction", "")))
+    except ValueError as exc:
+        raise ApiError(400, "invalid_template", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True, "items": items}
+
+
 @router.post("/meetings/{uid}/close")
 def close_meeting(uid: str, request: Request, payload: dict = Body(...)):
     try:
@@ -292,6 +306,32 @@ def list_users(request: Request):
         conn.close()
     return {"items": items, "current": request.state.user["id"],
             "roles": sorted(user_service.ROLES)}
+
+
+@router.get("/users/template.csv")
+def user_import_template(request: Request):
+    content = (
+        "\ufeffusername,display_name,password,role\n"
+        "zhangsan,张敏,ChangeMe123,member\n"
+        "lisi,李四,ChangeMe456,member\n"
+    )
+    return Response(
+        content=content, media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition":
+                 "attachment; filename=meeting-memory-users.csv"})
+
+
+@router.post("/users/batch")
+def batch_create_users(request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        result = user_service.batch_create_users(
+            conn, payload.get("items"))
+    except ValueError as exc:
+        raise ApiError(400, "invalid_user", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True, **result}
 
 
 @router.post("/users")

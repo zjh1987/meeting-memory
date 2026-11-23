@@ -45,7 +45,9 @@ def test_dashboard_shows_stats_and_latest_minutes(cfg):
     assert "工作概览" in html
     assert "会议总数" in html
     assert "本次会议确认了数据同步方案" in html
-    assert "整理问题清单" in html
+    assert "待跟进事项" not in html
+    assert "待办事项" not in html
+    assert "整理问题清单" not in html
 
 
 def test_meeting_list_groups_by_month(cfg):

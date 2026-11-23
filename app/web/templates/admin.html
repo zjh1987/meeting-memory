@@ -177,9 +177,12 @@
     <button class="btn ghost" id="tpl-reset" data-tip="清空表单，准备新建">清空表单</button>
     <span id="tpl-status" class="muted"></span>
   </div>
-  <div style="overflow-x:auto;margin-top:18px">
+  <p class="muted" style="margin-top:18px">
+    列表顺序即上传页和手机 App 的下拉顺序，第一项同时也是未指定模板时的默认模板。
+  </p>
+  <div style="overflow-x:auto;margin-top:8px">
     <table>
-      <thead><tr><th>标识</th><th>名称</th><th>场景</th><th>模块</th><th>类型</th><th></th></tr></thead>
+      <thead><tr><th>顺序</th><th>标识</th><th>名称</th><th>场景</th><th>模块</th><th>类型</th><th></th></tr></thead>
       <tbody id="tpl-list"></tbody>
     </table>
   </div>
@@ -209,7 +212,7 @@
 <div class="card tab-panel hidden" id="panel-users">
   <h2 class="section-title">账号与权限</h2>
   <p class="muted" style="margin-top:-6px">
-    管理员可维护账号与模型设置；普通成员可以查看、上传和查看纪要，但不能进入管理后台。
+    管理员可维护账号与模型设置；普通成员可以查看、上传和阅读纪要，但不能重新生成纪要、结案、重试处理或进入管理后台。
   </p>
   <div style="overflow-x:auto">
     <table>
@@ -244,6 +247,20 @@
     <button class="btn" id="user-create" data-tip="创建账号并立即生效">创建账号</button>
     <span id="user-status" class="muted"></span>
   </div>
+
+  <h3 style="font-size:16px;margin:26px 0 12px">批量导入账号</h3>
+  <p class="muted" style="margin-top:-6px">
+    CSV 列：username,display_name,password,role。role 填 member 或 admin；单次最多 200 个。
+    请用 Excel“另存为 CSV UTF-8”，避免中文显示名乱码。
+  </p>
+  <div class="toolbar">
+    <a class="btn ghost small" href="/api/admin/users/template.csv"
+       data-tip="下载可直接在 Excel 中编辑的 CSV 模板">下载 CSV 模板</a>
+    <input type="file" id="user-import-file" accept=".csv,text/csv">
+    <button class="btn" id="user-import" data-tip="按 CSV 内容批量创建账号">批量导入</button>
+    <span id="user-import-status" class="muted"></span>
+  </div>
+  <div id="user-import-result" class="muted" style="margin-top:8px"></div>
 
   <h3 style="font-size:16px;margin:26px 0 12px">修改我的密码</h3>
   <div class="grid2">
@@ -435,8 +452,14 @@ function collectCustomSections() {
 }
 function renderTemplates(items) {
   templatesCache = items;
-  $("tpl-list").innerHTML = items.map(t => `
+  $("tpl-list").innerHTML = items.map((t, index) => `
     <tr>
+      <td style="white-space:nowrap">
+        <button class="btn ghost small" data-move="up" data-key="${esc(t.key)}"
+                ${index === 0 ? "disabled" : ""} data-tip="上移">↑</button>
+        <button class="btn ghost small" data-move="down" data-key="${esc(t.key)}"
+                ${index === items.length - 1 ? "disabled" : ""} data-tip="下移">↓</button>
+      </td>
       <td class="muted">${esc(t.key)}</td>
       <td><strong>${esc(t.name)}</strong>
           <div class="muted">${esc(t.description || "")}</div></td>
@@ -456,6 +479,7 @@ $("tpl-list").addEventListener("click", async (event) => {
   const edit = event.target.closest("button[data-edit]");
   const copy = event.target.closest("button[data-copy]");
   const del = event.target.closest("button[data-delete]");
+  const move = event.target.closest("button[data-move]");
   const fill = (tpl) => {
     $("tpl-key").value = tpl.key;
     $("tpl-name").value = tpl.name;
@@ -485,6 +509,15 @@ $("tpl-list").addEventListener("click", async (event) => {
                 {method: "DELETE"});
       await loadSettings();
       setStatus("tpl-status", "已删除");
+    } catch (err) { setStatus("tpl-status", err.message, true); }
+  }
+  if (move) {
+    try {
+      await api("/api/admin/templates/" + encodeURIComponent(move.dataset.key)
+                + "/move", {method: "POST",
+                body: JSON.stringify({direction: move.dataset.move})});
+      await loadSettings();
+      setStatus("tpl-status", "顺序已更新，新的下拉顺序立即生效");
     } catch (err) { setStatus("tpl-status", err.message, true); }
   }
 });
@@ -625,6 +658,98 @@ $("user-create").addEventListener("click", async () => {
     setStatus("user-status", "账号已创建");
     await loadUsers();
   } catch (err) { setStatus("user-status", err.message, true); }
+});
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else quoted = false;
+      } else field += ch;
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ",") {
+      row.push(field); field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); field = "";
+      if (row.some(value => value.trim())) rows.push(row);
+      row = [];
+    } else {
+      field += ch;
+    }
+  }
+  if (field || row.length) {
+    row.push(field);
+    if (row.some(value => value.trim())) rows.push(row);
+  }
+  return rows;
+}
+
+$("user-import").addEventListener("click", async () => {
+  const file = $("user-import-file").files[0];
+  if (!file) {
+    setStatus("user-import-status", "请先选择 CSV 文件", true);
+    return;
+  }
+  try {
+    const text = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("读取 CSV 文件失败"));
+      reader.readAsText(file);
+    });
+    const rows = parseCsv(text.replace(/^\uFEFF/, ""));
+    if (rows.length < 2) throw new Error("CSV 中没有账号数据");
+    const header = rows[0].map(value => value.trim().toLowerCase());
+    const find = (...names) => header.findIndex(name => names.includes(name));
+    const idx = {
+      username: find("username", "账号", "登录账号"),
+      display_name: find("display_name", "显示名", "姓名"),
+      password: find("password", "密码", "初始密码"),
+      role: find("role", "角色")
+    };
+    if (idx.username < 0 || idx.password < 0) {
+      throw new Error("CSV 缺少 username 或 password 列");
+    }
+    const items = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row.some(value => value.trim())) continue;
+      const roleRaw = String(idx.role >= 0 ? row[idx.role] : "member").trim().toLowerCase();
+      items.push({
+        username: (row[idx.username] || "").trim(),
+        display_name: idx.display_name >= 0 ? (row[idx.display_name] || "").trim() : "",
+        password: row[idx.password] || "",
+        role: ["admin", "管理员"].includes(roleRaw) ? "admin" : "member"
+      });
+    }
+    if (!items.length) throw new Error("CSV 中没有有效账号");
+    if (items.length > 200) throw new Error("单次最多导入 200 个账号");
+    setStatus("user-import-status", `正在导入 ${items.length} 个账号…`);
+    $("user-import-result").textContent = "";
+    const result = await api("/api/admin/users/batch", {
+      method: "POST", body: JSON.stringify({items})
+    });
+    setStatus("user-import-status", `成功创建 ${result.created} 个账号`);
+    if (result.failed.length) {
+      $("user-import-result").innerHTML = "失败行：" + result.failed.map(item =>
+        `<div class="error" style="margin:4px 0">第 ${item.row} 行 ${esc(item.username)}：${esc(item.error)}</div>`
+      ).join("");
+    } else {
+      $("user-import-result").textContent = "全部导入成功。";
+    }
+    $("user-import-file").value = "";
+    await loadUsers();
+  } catch (err) {
+    setStatus("user-import-status", err.message, true);
+  }
 });
 $("pw-save").addEventListener("click", async () => {
   try {

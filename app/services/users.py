@@ -121,6 +121,26 @@ def create_user(conn, data: dict) -> dict:
     return get_user(conn, row["id"])
 
 
+def batch_create_users(conn, items) -> dict:
+    if not isinstance(items, list) or not items:
+        raise ValueError("请提供要导入的账号")
+    if len(items) > 200:
+        raise ValueError("单次最多导入 200 个账号")
+    created = []
+    failed = []
+    for index, item in enumerate(items, start=2):
+        username = ""
+        try:
+            if not isinstance(item, dict):
+                raise ValueError("行格式不正确")
+            username = str(item.get("username", "")).strip()
+            created.append(create_user(conn, item))
+        except Exception as exc:
+            failed.append({"row": index, "username": username,
+                           "error": str(exc)})
+    return {"created": len(created), "failed": failed, "items": created}
+
+
 def update_user(conn, user_id: int, data: dict) -> dict:
     user = get_user(conn, user_id)
     if user is None:

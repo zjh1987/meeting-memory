@@ -12,7 +12,7 @@
   </div>
 </div>
 
-<div class="stat-grid">
+<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
   <div class="stat">
     <div class="k">会议总数</div>
     <div class="v">{{ total }}</div>
@@ -27,11 +27,6 @@
     <div class="k">累计时长</div>
     <div class="v">{{ total_hours }}<span style="font-size:14px;color:var(--muted)"> 小时</span></div>
     <div class="muted">已完成转写的录音</div>
-  </div>
-  <div class="stat">
-    <div class="k">待办事项</div>
-    <div class="v">{{ open_actions }}</div>
-    <div class="muted">尚未闭环的 action item</div>
   </div>
 </div>
 
@@ -74,13 +69,6 @@
       {{ latest.title }} · {{ latest.recorded_at }} · {{ latest.duration_sec|mmss }}
     </div>
     <p class="preview-summary">{{ latest.minutes.summary }}</p>
-    {% if latest.actions %}
-    <div class="mini-actions">
-      {% for item in latest.actions %}
-      <div class="item"><span><strong>{{ item.owner }}</strong>：{{ item.task }}</span></div>
-      {% endfor %}
-    </div>
-    {% endif %}
     <p style="margin:16px 0 0"><a href="/m/{{ latest.uid }}">查看完整纪要 →</a></p>
     {% else %}
     <p class="muted" style="margin:0">还没有已完成的会议纪要，上传一段录音开始吧。</p>
@@ -103,18 +91,4 @@
     {% endfor %}
   </div>
 </div>
-
-{% if recent_actions %}
-<div class="card" style="margin-top:16px">
-  <h2 class="section-title">待跟进事项</h2>
-  <ul class="list-plain">
-    {% for item in recent_actions %}
-    <li>
-      <span><strong>{{ item.owner or "待指定" }}</strong>：{{ item.task }}</span>
-      <a class="muted" href="/m/{{ item.uid }}">{{ item.title }}</a>
-    </li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
 {% endblock %}

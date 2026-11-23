@@ -113,7 +113,7 @@ def save_asr(conn, data: dict) -> dict:
 
 def list_templates(conn) -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM minute_template ORDER BY builtin DESC, name").fetchall()
+        "SELECT * FROM minute_template ORDER BY sort_order, key").fetchall()
     return [_template_dict(row) for row in rows]
 
 
@@ -127,19 +127,30 @@ def _template_dict(row) -> dict:
         "custom_sections": json.loads(row["custom_sections"] or "[]"),
         "hint": row["hint"],
         "builtin": bool(row["builtin"]),
+        "sort_order": row["sort_order"],
     }
 
 
+def default_template_key(conn) -> str:
+    row = conn.execute(
+        "SELECT key FROM minute_template ORDER BY sort_order, key LIMIT 1"
+    ).fetchone()
+    return row["key"] if row else "standard"
+
+
 def get_template(conn, key: str) -> dict:
-    row = conn.execute("SELECT * FROM minute_template WHERE key=?",
-                       (key,)).fetchone()
+    row = None
+    if key:
+        row = conn.execute("SELECT * FROM minute_template WHERE key=?",
+                           (key,)).fetchone()
     if row is None:
-        row = conn.execute("SELECT * FROM minute_template WHERE key='standard'"
-                           ).fetchone()
+        row = conn.execute(
+            "SELECT * FROM minute_template ORDER BY sort_order, key LIMIT 1"
+        ).fetchone()
     if row is None:
         return {"key": "standard", "name": "常规会议", "hint": "",
                 "description": "", "scene": "常规", "custom_sections": [],
-                "sections": list(SECTION_KEYS)}
+                "sections": list(SECTION_KEYS), "sort_order": 0}
     return _template_dict(row)
 
 
@@ -197,8 +208,9 @@ def save_template(conn, data: dict) -> dict:
     else:
         conn.execute(
             "INSERT INTO minute_template (key, name, sections, hint, builtin,"
-            " description, scene, custom_sections, updated_at)"
-            " VALUES (?,?,?,?,0,?,?,?,?)"
+            " description, scene, custom_sections, sort_order, updated_at)"
+            " VALUES (?,?,?,?,0,?,?,?,"
+            " COALESCE((SELECT MAX(sort_order)+10 FROM minute_template),100),?)"
             " ON CONFLICT(key) DO UPDATE SET name=excluded.name,"
             " sections=excluded.sections, hint=excluded.hint,"
             " description=excluded.description, scene=excluded.scene,"
@@ -208,6 +220,34 @@ def save_template(conn, data: dict) -> dict:
              json.dumps(custom_sections, ensure_ascii=False), _now()),
         )
     return get_template(conn, key)
+
+
+def move_template(conn, key: str, direction: str) -> list[dict]:
+    if direction not in {"up", "down"}:
+        raise ValueError("排序方向只支持 up / down")
+    rows = conn.execute(
+        "SELECT key FROM minute_template ORDER BY sort_order, key").fetchall()
+    keys = [row["key"] for row in rows]
+    if key not in keys:
+        raise ValueError("模板不存在")
+    index = keys.index(key)
+    target = index - 1 if direction == "up" else index + 1
+    if target < 0 or target >= len(keys):
+        return list_templates(conn)
+    keys[index], keys[target] = keys[target], keys[index]
+    conn.execute("BEGIN")
+    try:
+        for position, item_key in enumerate(keys, start=1):
+            conn.execute(
+                "UPDATE minute_template SET sort_order=?, updated_at=?"
+                " WHERE key=?",
+                (position * 10, _now(), item_key),
+            )
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return list_templates(conn)
 
 
 def delete_template(conn, key: str) -> None:

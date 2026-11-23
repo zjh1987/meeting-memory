@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.config import Config
 from app.core.logging import log_event
+from app.services import settings as settings_service
 from app.storage import db, files, meeting_repo, project_repo
 
 UID_PATTERN = re.compile(r"^[A-Za-z0-9-]{1,64}$")
@@ -46,6 +47,7 @@ def _read_meta(path: Path, fallback_title: str) -> dict:
         "project": (data.get("project") or "未归类").strip() or "未归类",
         "title": (data.get("title") or fallback_title).strip() or fallback_title,
         "recorded_at": _safe_recorded_at(data.get("recorded_at"), path),
+        "template_key": str(data.get("template_key") or "").strip(),
         "meta_path": meta_path,
     }
 
@@ -60,13 +62,18 @@ def _harvest_one(cfg: Config, conn, path: Path) -> bool:
         log_event("info", "generated_uid", uid=safe_uid, filename=path.name)
 
     meta = _read_meta(path, title)
+    template_key = meta["template_key"]
+    valid_templates = {item["key"] for item in
+                       settings_service.list_templates(conn)}
+    if not template_key or template_key not in valid_templates:
+        template_key = settings_service.default_template_key(conn)
     row = meeting_repo.get_by_uid(conn, safe_uid)
     if row is None:
         pid = project_repo.ensure_project(conn, meta["project"])
         meeting_id = meeting_repo.create(
             conn, uid=safe_uid, title=meta["title"], project_id=pid,
             recorded_at=meta["recorded_at"], audio_filename=path.name,
-            status="uploading",
+            template_key=template_key, status="uploading",
         )
     else:
         meeting_id = row["id"]

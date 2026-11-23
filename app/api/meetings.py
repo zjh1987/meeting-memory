@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 
+from app.api.auth import require_admin
 from app.api.errors import ApiError
 from app.core import state
 from app.storage import db, meeting_repo
@@ -44,6 +45,7 @@ def meeting_status(request: Request, uid: str):
 
 @router.post("/meetings/{uid}/retry")
 def retry_meeting(request: Request, uid: str):
+    require_admin(request)
     conn = db.connect(request.app.state.cfg.db_path)
     try:
         m = meeting_repo.get_by_uid(conn, uid)

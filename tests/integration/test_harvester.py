@@ -3,6 +3,7 @@ from datetime import datetime
 
 from app.pipeline import harvester
 from app.pipeline.harvester import harvest_once
+from app.services import settings as settings_service
 from app.storage import db, meeting_repo, project_repo
 
 
@@ -31,6 +32,21 @@ def test_complete_file_creates_pending_meeting(cfg):
         assert m["recorded_at"] == "2026-11-21 09:00:00"
         assert (cfg.ready_dir / m["audio_filename"]).exists()
         assert not (cfg.inbox_dir / "u1__会议.json").exists()
+    finally:
+        conn.close()
+
+
+def test_missing_template_uses_first_template(cfg):
+    conn = db.connect(cfg.db_path)
+    try:
+        assert settings_service.move_template(conn, "standard", "down")[0]["key"] == "weekly"
+    finally:
+        conn.close()
+    (cfg.inbox_dir / "u3__设备录音.m4a").write_bytes(b"audio")
+    assert harvest_once(cfg) == 1
+    conn = db.connect(cfg.db_path)
+    try:
+        assert meeting_repo.get_by_uid(conn, "u3")["template_key"] == "weekly"
     finally:
         conn.close()
 

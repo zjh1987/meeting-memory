@@ -59,6 +59,37 @@ def test_admin_hotwords_and_templates(cfg):
     assert resp.status_code == 400
 
 
+def test_template_order_and_default_upload(cfg):
+    client = _client(cfg)
+    items = client.get("/api/admin/templates").json()["items"]
+    assert [item["key"] for item in items][:2] == ["standard", "weekly"]
+
+    created = client.post("/api/admin/templates", json={
+        "key": "custom-order", "name": "自定义排序",
+        "scene": "自定义", "description": "测试排序",
+        "sections": ["summary"], "hint": "测试"})
+    assert created.status_code == 200
+    assert created.json()["template"]["sort_order"] > 0
+
+    moved = client.post("/api/admin/templates/standard/move",
+                        json={"direction": "down"})
+    assert moved.status_code == 200
+    assert moved.json()["items"][0]["key"] == "weekly"
+
+    upload = client.post(
+        "/api/meetings",
+        files={"file": ("a.wav", b"fake-audio", "audio/wav")},
+        data={"project_name": "项目A"},
+    )
+    assert upload.status_code == 200
+    conn = db.connect(cfg.db_path)
+    try:
+        row = meeting_repo.get_by_uid(conn, upload.json()["uid"])
+    finally:
+        conn.close()
+    assert row["template_key"] == "weekly"
+
+
 def test_close_meeting_excluded_from_relations(cfg):
     conn = db.connect(cfg.db_path)
     try:

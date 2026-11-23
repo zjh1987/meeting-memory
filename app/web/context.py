@@ -12,20 +12,20 @@ def failure_hint(meeting: dict) -> str:
     lower = message.lower()
     if code == "audio_too_long":
         return ("录音时长超过服务器设置的转写上限。请缩短单次录音，"
-                "或在服务器后台调大 ASR 最长时长。")
+                "或联系管理员调整 ASR 最长时长。")
     if code == "file_missing":
         return "服务器上找不到原始音频文件，请重新上传。"
     if code == "asr_unavailable":
         if ("torch.float32" in message or "cuda" in lower
                 or "说话人分离" in message):
             return ("长录音的说话人分离阶段失败：FunASR 与当前 NumPy/Torch "
-                    "版本不兼容。录音已保留，服务端升级后可直接重试。")
+                    "版本不兼容。录音已保留，管理员升级服务端后可直接重试。")
         if "out of memory" in lower or "显存" in message:
             return "GPU 显存不足。建议缩短单场录音，或升级显卡后重试。"
-        return ("语音识别服务异常。录音已保留，可直接重试；"
+        return ("语音识别服务异常。录音已保留，管理员可直接重试；"
                 "如果反复失败，请检查 GPU、模型文件和服务端日志。")
     if code.startswith("llm_") or code == "minutes_failed":
-        return ("转写已完成，但纪要生成失败。可点击“重新生成纪要”，"
+        return ("转写已完成，但纪要生成失败。请联系管理员重新生成，"
                 "或检查大模型配置后重试。")
     if code == "relation_failed":
         return "纪要已生成，但关联归档失败；可查看服务端日志后重新归档。"

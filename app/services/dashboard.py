@@ -1,9 +1,7 @@
-"""概览页统计：总量、趋势、状态分布、最近纪要与待办。"""
+"""概览页统计：总量、趋势、状态分布与最近纪要。"""
 
 import json
 from datetime import datetime
-
-from app.storage import action_repo
 
 
 def _month_key(moment: datetime) -> str:
@@ -31,9 +29,6 @@ def overview(cfg, conn) -> dict:
     month_count = conn.execute(
         "SELECT COUNT(*) AS n FROM meeting WHERE substr(recorded_at,1,7)=?",
         (month_prefix,)).fetchone()["n"]
-    open_actions = conn.execute(
-        "SELECT COUNT(*) AS n FROM action_item WHERE status='open'"
-    ).fetchone()["n"]
     projects = conn.execute("SELECT COUNT(*) AS n FROM project").fetchone()["n"]
 
     status_rows = conn.execute(
@@ -71,19 +66,12 @@ def overview(cfg, conn) -> dict:
     if latest_row:
         latest = dict(latest_row)
         latest["minutes"] = json.loads(latest["minutes"])
-        latest["actions"] = action_repo.list_for(conn, latest["id"])[:4]
-
-    recent_actions = conn.execute(
-        "SELECT a.task, a.owner, a.due, m.uid, m.title FROM action_item a"
-        " JOIN meeting m ON m.id=a.meeting_id"
-        " WHERE a.status='open' ORDER BY a.id DESC LIMIT 5").fetchall()
 
     total = totals["n"] or 0
     return {
         "total": total,
         "month_count": month_count,
         "total_hours": round((totals["dur"] or 0) / 3600, 1),
-        "open_actions": open_actions,
         "projects": projects,
         "months": months,
         "status": {"done": done, "processing": processing, "failed": failed},
@@ -94,6 +82,5 @@ def overview(cfg, conn) -> dict:
         },
         "recent": recent,
         "latest": latest,
-        "recent_actions": [dict(row) for row in recent_actions],
         "today": now.strftime("%Y年%m月%d日"),
     }

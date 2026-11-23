@@ -10,15 +10,15 @@
     </div>
   </div>
   <div class="actions">
-    {% if can_retry and not standalone %}
+    {% if user and user.role == "admin" and can_retry and not standalone %}
     <button class="btn ghost small retry-action" id="retry-btn"
             data-tip="从上次中断的阶段继续处理">重试</button>
     {% endif %}
-    {% if finished and transcript and not standalone %}
+    {% if user and user.role == "admin" and finished and transcript and not standalone %}
     <button class="btn ghost small" id="regen-btn"
             data-tip="保留逐字稿，只重新生成纪要与关联">重新生成纪要</button>
     {% endif %}
-    {% if finished and not standalone %}
+    {% if user and user.role == "admin" and finished and not standalone %}
     <button class="btn ghost small" id="close-btn"
             data-tip="结案后不再被后续会议引用为关联">{% if m.closed %}取消结案{% else %}标记结案{% endif %}</button>
     {% endif %}
@@ -56,8 +56,12 @@
   <p class="muted" style="margin:0">录音和原始音频仍保存在服务器，不需要重新上传。</p>
   {% if can_retry %}
   <div style="margin-top:14px">
+    {% if user and user.role == "admin" %}
     <button class="btn ghost small retry-action"
             data-tip="从失败阶段继续处理">重试处理</button>
+    {% else %}
+    <p class="muted" style="margin:0">需要管理员处理，请联系管理员重试。</p>
+    {% endif %}
   </div>
   {% endif %}
   <details style="margin-top:12px">

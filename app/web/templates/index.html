@@ -55,7 +55,7 @@
       {% if m.status == 'failed' and (m.error_code or m.error_msg) %}
       <div class="error" style="margin-top:4px">
         {{ m.error_code or 'failed' }}：{{ (m.error_msg or '')|truncate(90, true, '…') }}
-        · <a href="/m/{{ m.uid }}">查看原因并重试</a>
+        · <a href="/m/{{ m.uid }}">{% if user and user.role == "admin" %}查看原因并重试{% else %}查看原因{% endif %}</a>
       </div>
       {% endif %}
     </div>
