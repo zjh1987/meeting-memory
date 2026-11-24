@@ -4,9 +4,10 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Body, Request
+from fastapi import APIRouter, Body, File, Form, Request, UploadFile
 from fastapi.responses import Response
 
+from app.api import app_update
 from app.api.errors import ApiError
 from app.config import Config
 from app.providers import build_llm
@@ -15,7 +16,7 @@ from app.pipeline import archive
 from app.services import meetings as meeting_service
 from app.services import settings as settings_service
 from app.services import users as user_service
-from app.storage import db
+from app.storage import db, meeting_repo, project_repo
 
 router = APIRouter(prefix="/api/admin")
 
@@ -98,6 +99,7 @@ def get_settings(request: Request):
         llm = settings_service.llm_settings(cfg, conn)
         asr = settings_service.asr_settings(cfg, conn)
         templates = settings_service.list_templates(conn)
+        relations = settings_service.relation_settings(conn)
         metrics = _metrics(conn)
     finally:
         conn.close()
@@ -110,6 +112,7 @@ def get_settings(request: Request):
                 "metrics": metrics},
         "hotwords": _hotwords(cfg),
         "templates": templates,
+        "relations": relations,
     }
 
 
@@ -146,6 +149,18 @@ def save_asr(request: Request, payload: dict = Body(...)):
     finally:
         conn.close()
     return {"ok": True, "asr": saved}
+
+
+@router.post("/relations")
+def save_relations(request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        saved = settings_service.save_relations(conn, payload)
+    except ValueError as exc:
+        raise ApiError(400, "invalid_relation", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True, "settings": saved}
 
 
 @router.post("/test-llm")
@@ -295,6 +310,91 @@ def delete_meeting(uid: str, request: Request):
 def rebuild_archives(request: Request):
     count = archive.rebuild_all(request.app.state.cfg)
     return {"ok": True, "count": count}
+
+
+@router.get("/projects")
+def list_projects(request: Request):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        items = project_repo.list_with_counts(conn)
+    finally:
+        conn.close()
+    return {"items": items,
+            "total": sum(item["meeting_count"] for item in items)}
+
+
+@router.post("/projects")
+def create_project(request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        project = project_repo.create(conn, payload.get("name", ""))
+    except ValueError as exc:
+        raise ApiError(400, "invalid_project", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True, "project": project}
+
+
+@router.put("/projects/{project_id}")
+def rename_project(project_id: int, request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        project = project_repo.rename(conn, project_id, payload.get("name", ""))
+    except LookupError as exc:
+        raise ApiError(404, "not_found", str(exc)) from exc
+    except ValueError as exc:
+        raise ApiError(400, "invalid_project", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True, "project": project}
+
+
+@router.delete("/projects/{project_id}")
+def delete_project(project_id: int, request: Request, move_to: int | None = None):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        result = project_repo.delete(conn, project_id, move_to=move_to)
+    except LookupError as exc:
+        raise ApiError(404, "not_found", str(exc)) from exc
+    except ValueError as exc:
+        raise ApiError(400, "invalid_project", str(exc)) from exc
+    finally:
+        conn.close()
+    return {"ok": True, **result}
+
+
+@router.post("/meetings/{uid}/project")
+def set_meeting_project(uid: str, request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        row = meeting_repo.get_by_uid(conn, uid)
+        if row is None:
+            raise ApiError(404, "not_found", "会议不存在")
+        try:
+            project_id = int(payload.get("project_id"))
+        except (TypeError, ValueError) as exc:
+            raise ApiError(400, "invalid_project", "必须指定项目") from exc
+        if project_repo.get(conn, project_id) is None:
+            raise ApiError(404, "not_found", "项目不存在")
+        meeting_repo.update_fields(conn, row["id"], project_id=project_id)
+    finally:
+        conn.close()
+    return {"ok": True, "project_id": project_id}
+
+
+@router.post("/app-apk")
+async def upload_app_apk(request: Request, file: UploadFile = File(...),
+                         version_code: int = Form(...),
+                         version_name: str = Form(""),
+                         notes: str = Form("")):
+    try:
+        release = await app_update.save_release(
+            request.app.state.cfg, file, version_code, version_name, notes)
+    except ValueError as exc:
+        raise ApiError(400, "invalid_apk", str(exc)) from exc
+    finally:
+        await file.close()
+    return {"ok": True, "release": release}
 
 
 @router.get("/users")

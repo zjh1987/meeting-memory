@@ -111,6 +111,47 @@ def save_asr(conn, data: dict) -> dict:
     return {"backend": backend, "device": device}
 
 
+def relation_settings(conn) -> dict:
+    """跨会议关联配置：只影响本地规则匹配，不进入大模型 prompt。"""
+    raw = _raw(conn)
+    return {
+        "enabled": raw.get("relations.enabled", "1") not in {"0", "false", "False"},
+        "window_days": int(raw.get("relations.window_days", "180")),
+        "max_previous": int(raw.get("relations.max_previous", "10")),
+        "topic_threshold": float(raw.get("relations.topic_threshold", "0.6")),
+        "task_threshold": float(raw.get("relations.task_threshold", "0.5")),
+        "hint": raw.get("relations.hint", ""),
+    }
+
+
+def save_relations(conn, data: dict) -> dict:
+    enabled = 1 if data.get("enabled", True) else 0
+    try:
+        window_days = int(data.get("window_days", 180))
+        max_previous = int(data.get("max_previous", 10))
+        topic_threshold = float(data.get("topic_threshold", 0.6))
+        task_threshold = float(data.get("task_threshold", 0.5))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("关联设置必须是数字") from exc
+    if not 0 <= window_days <= 3650:
+        raise ValueError("回看天数必须在 0 到 3650 之间（0 表示不限）")
+    if not 1 <= max_previous <= 50:
+        raise ValueError("关联会议数必须在 1 到 50 之间")
+    for label, value in (("议题阈值", topic_threshold), ("待办阈值", task_threshold)):
+        if not 0 <= value <= 1:
+            raise ValueError(f"{label}必须在 0 到 1 之间")
+    hint = str(data.get("hint", "")).strip()
+    if len(hint) > 2000:
+        raise ValueError("关联提示词不能超过 2000 个字符")
+    _put(conn, "relations.enabled", str(enabled))
+    _put(conn, "relations.window_days", str(window_days))
+    _put(conn, "relations.max_previous", str(max_previous))
+    _put(conn, "relations.topic_threshold", str(topic_threshold))
+    _put(conn, "relations.task_threshold", str(task_threshold))
+    _put(conn, "relations.hint", hint)
+    return relation_settings(conn)
+
+
 def list_templates(conn) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM minute_template ORDER BY sort_order, key").fetchall()

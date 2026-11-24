@@ -165,3 +165,20 @@ def previous_done(conn, project_id: int, before_id: int, limit: int = 5) -> list
         (project_id, before_id, limit),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def relation_candidates(conn, project_id: int, before_id: int,
+                        since: str | None = None,
+                        limit: int = 60) -> list[dict]:
+    """关联候选：同项目、已完成、未结案，按录音时间从新到旧。"""
+    where = ["project_id=?", "id<?", "status='done'", "closed=0"]
+    params: list = [project_id, before_id]
+    if since:
+        where.append("recorded_at>=?")
+        params.append(since)
+    rows = conn.execute(
+        "SELECT * FROM meeting WHERE " + " AND ".join(where)
+        + " ORDER BY recorded_at DESC, id DESC LIMIT ?",
+        params + [limit],
+    ).fetchall()
+    return [dict(r) for r in rows]

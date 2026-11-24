@@ -106,6 +106,8 @@ public class MainActivity extends AppCompatActivity {
                 setEnabled(true);
             }
         });
+
+        UpdatePrompt.check(this, false);
     }
 
     @Override

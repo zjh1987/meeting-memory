@@ -40,8 +40,9 @@ def _run_relations(cfg, conn, meeting):
         meeting_repo.set_status(conn, meeting["id"], "relating")
         fresh = meeting_repo.get_by_id(conn, meeting["id"])
         data = json.loads(fresh["minutes"])
+        options = settings_service.relation_settings(conn)
         relation_repo.replace(conn, meeting["id"],
-                              relations.build_relations(conn, fresh, data))
+                              relations.build_relations(conn, fresh, data, options))
         meeting_repo.set_status(conn, meeting["id"], "done")
     except Exception as exc:
         traceback.print_exc()

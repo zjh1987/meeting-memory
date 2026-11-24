@@ -184,4 +184,12 @@ public class AppPrefs {
     public void setCachedTemplates(String json) {
         prefs.edit().putString("cache_templates", json).apply();
     }
+
+    public long lastUpdateCheck() {
+        return prefs.getLong("last_update_check", 0L);
+    }
+
+    public void setLastUpdateCheck(long value) {
+        prefs.edit().putLong("last_update_check", value).apply();
+    }
 }

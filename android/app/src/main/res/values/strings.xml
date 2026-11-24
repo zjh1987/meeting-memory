@@ -81,6 +81,7 @@
     <string name="notification_permission">通知权限</string>
     <string name="notification_permission_desc">录音与上传进度会通过通知展示</string>
     <string name="about_version">版本</string>
+    <string name="check_update">检查更新</string>
     <string name="about_boundary">数据边界：音频、模型、数据库和归档都在你的服务器上；纪要默认由外部大模型生成，只发送转写文本。可在服务器后台切换内网模型。</string>
 
     <string name="action_play">播放</string>

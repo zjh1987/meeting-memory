@@ -115,6 +115,105 @@ def test_close_meeting_excluded_from_relations(cfg):
         conn.close()
 
 
+def test_relation_settings_roundtrip(cfg):
+    client = _client(cfg)
+    resp = client.post("/api/admin/relations", json={
+        "enabled": True, "window_days": 90, "max_previous": 6,
+        "topic_threshold": 0.55, "task_threshold": 0.45,
+        "hint": "预算, 费用\n交付, 上线"})
+    assert resp.status_code == 200
+    saved = resp.json()["settings"]
+    assert saved["window_days"] == 90
+    assert saved["hint"].startswith("预算")
+    settings = client.get("/api/admin/settings").json()
+    assert settings["relations"]["max_previous"] == 6
+
+    bad = client.post("/api/admin/relations", json={"window_days": 5000})
+    assert bad.status_code == 400
+
+
+def test_admin_project_management_and_reassign(cfg):
+    client = _client(cfg)
+    created = client.post("/api/admin/projects", json={"name": "项目甲"})
+    assert created.status_code == 200
+    pid = created.json()["project"]["id"]
+    assert client.post("/api/admin/projects", json={"name": "项目甲"}).status_code == 400
+
+    conn = db.connect(cfg.db_path)
+    try:
+        meeting_repo.create(
+            conn, uid="p1", title="会议", project_id=pid,
+            recorded_at="2026-11-21 10:00:00", audio_filename="p1.m4a",
+            status="done")
+    finally:
+        conn.close()
+
+    renamed = client.put(f"/api/admin/projects/{pid}", json={"name": "项目乙"})
+    assert renamed.status_code == 200
+    assert renamed.json()["project"]["name"] == "项目乙"
+    items = {item["name"]: item
+             for item in client.get("/api/admin/projects").json()["items"]}
+    assert items["项目乙"]["meeting_count"] == 1
+
+    target = client.post("/api/admin/projects", json={"name": "归集目标"})
+    target_id = target.json()["project"]["id"]
+    refused = client.delete(f"/api/admin/projects/{pid}")
+    assert refused.status_code == 400
+    moved = client.delete(f"/api/admin/projects/{pid}?move_to={target_id}")
+    assert moved.status_code == 200
+    assert moved.json()["moved"] == 1
+
+    conn = db.connect(cfg.db_path)
+    try:
+        row = meeting_repo.get_by_uid(conn, "p1")
+        assert row["project_id"] == target_id
+    finally:
+        conn.close()
+
+
+def test_admin_can_move_single_meeting(cfg):
+    client = _client(cfg)
+    first = client.post("/api/admin/projects", json={"name": "甲"}).json()["project"]["id"]
+    second = client.post("/api/admin/projects", json={"name": "乙"}).json()["project"]["id"]
+    conn = db.connect(cfg.db_path)
+    try:
+        meeting_repo.create(
+            conn, uid="m1", title="会议", project_id=first,
+            recorded_at="2026-11-21 10:00:00", audio_filename="m1.m4a",
+            status="done")
+    finally:
+        conn.close()
+    resp = client.post("/api/admin/meetings/m1/project",
+                       json={"project_id": second})
+    assert resp.status_code == 200
+    conn = db.connect(cfg.db_path)
+    try:
+        assert meeting_repo.get_by_uid(conn, "m1")["project_id"] == second
+    finally:
+        conn.close()
+
+
+def test_app_release_upload_and_public_download(cfg):
+    client = _client(cfg)
+    resp = client.post(
+        "/api/admin/app-apk",
+        files={"file": ("app.apk", b"fake-apk", "application/vnd.android.package-archive")},
+        data={"version_code": "4", "version_name": "1.0.3", "notes": "测试版本"})
+    assert resp.status_code == 200
+    release = resp.json()["release"]
+    assert release["version_code"] == 4
+
+    info = client.get("/api/app/android/latest").json()
+    assert info["available"] is True
+    assert info["url"].endswith(".apk")
+    download = client.get(info["url"])
+    assert download.status_code == 200
+    assert download.content == b"fake-apk"
+
+    anonymous = TestClient(create_app(cfg, start_threads=False))
+    assert anonymous.get("/api/app/android/latest").status_code == 200
+
+
 def test_static_archive_is_served_inside_app(cfg):
     (cfg.site_dir / "index.html").write_text("<html>归档首页</html>",
                                              encoding="utf-8")

@@ -104,6 +104,8 @@ public class SettingsFragment extends Fragment {
         }));
 
         binding.btnTest.setOnClickListener(v -> testConnection());
+        binding.btnUpdate.setOnClickListener(v ->
+                UpdatePrompt.check(requireActivity(), true));
         binding.btnRelogin.setOnClickListener(v -> startActivity(
                 new Intent(requireContext(), LoginActivity.class)
                         .putExtra("from_settings", true)));

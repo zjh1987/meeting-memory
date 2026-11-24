@@ -52,6 +52,10 @@ class Config:
     def archive_dir(self) -> Path:
         return self.data_dir / "archive"
 
+    @property
+    def app_dir(self) -> Path:
+        return self.data_dir / "app"
+
     @classmethod
     def from_env(cls) -> "Config":
         data_dir = Path(os.getenv("DATA_DIR", "./data")).resolve()
@@ -89,7 +93,7 @@ class Config:
 
     def ensure_dirs(self) -> None:
         for d in (self.data_dir, self.inbox_dir, self.ready_dir,
-                  self.archive_dir, self.site_dir, self.log_dir):
+                  self.archive_dir, self.app_dir, self.site_dir, self.log_dir):
             d.mkdir(parents=True, exist_ok=True)
 
     def validate(self) -> list[str]:

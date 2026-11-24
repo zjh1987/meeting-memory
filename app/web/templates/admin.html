@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>管理后台</h1>
-    <div class="sub">模型调用、语音识别、热词、纪要模板与会议管理</div>
+    <div class="sub">模型调用、语音识别、纪要模板、跨会议关联、项目与 App 更新</div>
   </div>
   <a class="btn ghost small" href="/" data-tip="返回会议列表">返回列表</a>
 </div>
@@ -14,6 +14,9 @@
   <button data-tab="asr" data-tip="查看本地语音模型状态与效率">语音识别</button>
   <button data-tab="hotwords" data-tip="维护专有名词与项目名，提高识别准确率">热词</button>
   <button data-tab="templates" data-tip="自定义纪要展示模块与提示词">纪要模板</button>
+  <button data-tab="relations" data-tip="按时间范围与关键词匹配历史会议，不调用大模型">跨会议关联</button>
+  <button data-tab="projects" data-tip="新建、重命名、归集与删除项目">项目</button>
+  <button data-tab="app" data-tip="上传 Android 安装包，App 内自动升级">App 更新</button>
   <button data-tab="meetings" data-tip="结案、重生成、删除与重建归档">会议管理</button>
   <button data-tab="users" data-tip="管理员账号、密码与成员权限">权限</button>
 </div>
@@ -188,6 +191,106 @@
   </div>
 </div>
 
+<!-- 跨会议关联 -->
+<div class="card tab-panel hidden" id="panel-relations">
+  <h2 class="section-title">跨会议关联</h2>
+  <p class="muted" style="margin-top:-6px">
+    关联完全在服务器本地完成：只回看同项目历史会议的议题与未闭环待办，
+    按时间范围与关键词匹配，不调用大模型，因此不会增加任何 API 费用。
+  </p>
+  <div class="field">
+    <label><input type="checkbox" id="rel-enabled"> 启用跨会议关联</label>
+  </div>
+  <div class="grid2">
+    <div class="field">
+      <label>回看时间范围（天）</label>
+      <input id="rel-window" type="number" min="0" max="3650" step="1">
+      <div class="hint">只关联该时间范围内的会议；0 表示不限时间。</div>
+    </div>
+    <div class="field">
+      <label>参考会议上限</label>
+      <input id="rel-max" type="number" min="1" max="50" step="1">
+      <div class="hint">最近 N 场始终参考；更早的会议仅在命中关键词时纳入。</div>
+    </div>
+    <div class="field">
+      <label>议题相似阈值</label>
+      <input id="rel-topic" type="number" min="0" max="1" step="0.05">
+      <div class="hint">越低越容易判定为“议题重复”，默认 0.6。</div>
+    </div>
+    <div class="field">
+      <label>待办相似阈值</label>
+      <input id="rel-task" type="number" min="0" max="1" step="0.05">
+      <div class="hint">越低越容易把待办视为已跟进，默认 0.5。</div>
+    </div>
+  </div>
+  <div class="field">
+    <label>关联提示词（关键词组）</label>
+    <textarea id="rel-hint" style="min-height:110px"
+              placeholder="预算, 成本, 费用&#10;交付, 上线, 发布&#10;验收, 测试"></textarea>
+    <div class="hint">
+      每行一组同义词，用逗号或顿号分隔。当历史会议和本次会议命中同一组词时，
+      即使字面差异较大也会建立关联；该提示词只参与本地匹配，不会发送给大模型。
+    </div>
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="rel-save" data-tip="保存后对下一场会议立即生效">保存关联设置</button>
+    <span id="rel-status" class="muted"></span>
+  </div>
+</div>
+
+<!-- 项目 -->
+<div class="card tab-panel hidden" id="panel-projects">
+  <h2 class="section-title">项目管理</h2>
+  <p class="muted" style="margin-top:-6px">
+    项目用于归集会议，也是上传页与手机 App 的下拉选项。
+    删除仍有会议的项目时，需要先指定这些会议要转移到哪个项目。
+  </p>
+  <div class="toolbar" style="margin-bottom:12px">
+    <input id="project-name" placeholder="新项目名称" style="max-width:260px">
+    <button class="btn" id="project-create" data-tip="创建后立即出现在上传下拉框">新建项目</button>
+    <span id="project-status" class="muted"></span>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>项目</th><th>会议数</th><th>创建时间</th><th>操作</th></tr></thead>
+      <tbody id="projects-list"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- App 更新 -->
+<div class="card tab-panel hidden" id="panel-app">
+  <h2 class="section-title">Android 应用更新</h2>
+  <p class="muted" style="margin-top:-6px">
+    上传新版 APK 后，已安装旧版的手机在启动或点击“检查更新”时会直接下载并覆盖安装，
+    不需要卸载。手机需允许本应用安装未知来源应用（首次会引导开启）。
+  </p>
+  <div class="notice" id="app-current">正在读取当前发布信息…</div>
+  <div class="grid2" style="margin-top:16px">
+    <div class="field">
+      <label>版本号（整数，必须大于旧版）</label>
+      <input id="app-code" type="number" min="1" step="1" placeholder="例如：4">
+    </div>
+    <div class="field">
+      <label>版本名称</label>
+      <input id="app-name" placeholder="例如：1.0.3">
+    </div>
+  </div>
+  <div class="field">
+    <label>更新说明</label>
+    <textarea id="app-notes" style="min-height:80px"
+              placeholder="例如：优化会议关联、增加项目管理、支持应用内升级"></textarea>
+  </div>
+  <div class="field">
+    <label>APK 文件</label>
+    <input type="file" id="app-file" accept=".apk,application/vnd.android.package-archive">
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="app-upload" data-tip="上传后立即成为最新版本">上传并发布</button>
+    <span id="app-status" class="muted"></span>
+  </div>
+</div>
+
 <!-- 会议管理 -->
 <div class="card tab-panel hidden" id="panel-meetings">
   <h2 class="section-title">会议管理</h2>
@@ -346,6 +449,14 @@ async function loadSettings() {
       <td class="muted" style="word-break:break-all">${esc(m.path)}</td>
     </tr>`).join("");
 
+  const rel = data.relations;
+  $("rel-enabled").checked = !!rel.enabled;
+  $("rel-window").value = rel.window_days;
+  $("rel-max").value = rel.max_previous;
+  $("rel-topic").value = rel.topic_threshold;
+  $("rel-task").value = rel.task_threshold;
+  $("rel-hint").value = rel.hint || "";
+
   $("hotwords-text").value = data.hotwords.join("\n");
   renderTemplates(data.templates);
 }
@@ -409,6 +520,21 @@ $("asr-check").addEventListener("click", async () => {
     const result = await api("/api/admin/asr/check", {method: "POST"});
     setStatus("asr-status", result.message, !result.ok);
   } catch (err) { setStatus("asr-status", err.message, true); }
+});
+
+$("rel-save").addEventListener("click", async () => {
+  try {
+    await api("/api/admin/relations", {method: "POST", body: JSON.stringify({
+      enabled: $("rel-enabled").checked,
+      window_days: Number($("rel-window").value),
+      max_previous: Number($("rel-max").value),
+      topic_threshold: Number($("rel-topic").value),
+      task_threshold: Number($("rel-task").value),
+      hint: $("rel-hint").value
+    })});
+    setStatus("rel-status", "已保存，下一场会议立即生效（不会产生额外 API 费用）");
+    await loadSettings();
+  } catch (err) { setStatus("rel-status", err.message, true); }
 });
 
 $("hotwords-save").addEventListener("click", async () => {
@@ -545,13 +671,24 @@ $("tpl-reset").addEventListener("click", () => {
   document.querySelectorAll("#tpl-sections input").forEach(box => box.checked = false);
 });
 
+let projectsCache = [];
+function projectOptions(selectedId) {
+  if (!projectsCache.length) {
+    return '<option value="">加载中…</option>';
+  }
+  return projectsCache.map(p => `
+    <option value="${p.id}" ${p.id === selectedId ? "selected" : ""}>${esc(p.name)}</option>
+  `).join("");
+}
+
 async function loadMeetings() {
   const data = await api("/api/meetings?size=100");
   $("meetings-list").innerHTML = data.items.map(m => `
     <tr>
       <td><a href="/m/${esc(m.uid)}"><strong>${esc(m.title)}</strong></a>
           ${m.closed ? '<span class="chip closed">已结案</span>' : ""}</td>
-      <td class="muted">${esc(m.project_name)}</td>
+      <td><select data-project="${esc(m.uid)}" data-tip="直接调整会议所属项目"
+                  style="min-width:120px">${projectOptions(m.project_id)}</select></td>
       <td class="muted">${esc(m.recorded_at)}</td>
       <td><span class="chip ${m.status === "done" ? "done" : m.status === "failed" ? "failed" : "processing"}">${esc(m.status)}</span></td>
       <td style="white-space:nowrap">
@@ -593,6 +730,106 @@ $("archives-rebuild").addEventListener("click", async () => {
     const data = await api("/api/admin/rebuild-archives", {method: "POST"});
     setStatus("meetings-status", `已重建 ${data.count} 场静态归档`);
   } catch (err) { setStatus("meetings-status", err.message, true); }
+});
+$("meetings-list").addEventListener("change", async (event) => {
+  const select = event.target.closest("select[data-project]");
+  if (!select) return;
+  if (!select.value) {
+    await loadProjects();
+    await loadMeetings();
+    return;
+  }
+  try {
+    await api(`/api/admin/meetings/${select.dataset.project}/project`, {
+      method: "POST", body: JSON.stringify({project_id: Number(select.value)})
+    });
+    setStatus("meetings-status", "会议归属已更新");
+    await loadProjects();
+  } catch (err) {
+    setStatus("meetings-status", err.message, true);
+    await loadMeetings();
+  }
+});
+
+async function loadProjects() {
+  const data = await api("/api/admin/projects");
+  projectsCache = data.items;
+  $("projects-list").innerHTML = data.items.map(p => `
+    <tr>
+      <td><strong>${esc(p.name)}</strong></td>
+      <td>${p.meeting_count}</td>
+      <td class="muted">${esc(p.created_at)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn ghost small" data-rename="${p.id}">重命名</button>
+        <button class="btn danger small" data-remove-project="${p.id}">删除</button>
+      </td>
+    </tr>`).join("") || '<tr><td colspan="4" class="muted">暂无项目</td></tr>';
+  return data;
+}
+
+$("project-create").addEventListener("click", async () => {
+  const name = $("project-name").value.trim();
+  if (!name) {
+    setStatus("project-status", "请输入项目名称", true);
+    return;
+  }
+  try {
+    await api("/api/admin/projects", {
+      method: "POST", body: JSON.stringify({name})
+    });
+    $("project-name").value = "";
+    setStatus("project-status", "项目已创建，上传与 App 下拉框立即生效");
+    await loadProjects();
+    await loadMeetings();
+  } catch (err) { setStatus("project-status", err.message, true); }
+});
+
+$("projects-list").addEventListener("click", async (event) => {
+  const rename = event.target.closest("button[data-rename]");
+  const remove = event.target.closest("button[data-remove-project]");
+  try {
+    if (rename) {
+      const project = projectsCache.find(p => p.id === Number(rename.dataset.rename));
+      const name = prompt("新的项目名称", project ? project.name : "");
+      if (name === null || !name.trim()) return;
+      await api("/api/admin/projects/" + rename.dataset.rename, {
+        method: "PUT", body: JSON.stringify({name: name.trim()})
+      });
+      setStatus("project-status", "项目已重命名");
+      await loadProjects();
+      await loadMeetings();
+    }
+    if (remove) {
+      const project = projectsCache.find(p => p.id === Number(remove.dataset.removeProject));
+      if (!project) return;
+      let query = "";
+      if (project.meeting_count > 0) {
+        const others = projectsCache.filter(p => p.id !== project.id);
+        if (!others.length) {
+          setStatus("project-status", "没有可用的目标项目，请先新建一个项目", true);
+          return;
+        }
+        const answer = prompt(
+          `「${project.name}」下有 ${project.meeting_count} 场会议。\n` +
+          `输入要转移到的项目名称（可选：${others.map(p => p.name).join("、")}）`,
+          others[0].name);
+        if (answer === null) return;
+        const target = others.find(p => p.name === answer.trim());
+        if (!target) {
+          setStatus("project-status", "目标项目不存在，请从现有项目中选择", true);
+          return;
+        }
+        query = "?move_to=" + target.id;
+      }
+      if (!confirm(`确定删除项目「${project.name}」？`)) return;
+      const data = await api("/api/admin/projects/" + remove.dataset.removeProject + query,
+                             {method: "DELETE"});
+      setStatus("project-status", data.moved
+        ? `已删除，并转移 ${data.moved} 场会议` : "项目已删除");
+      await loadProjects();
+      await loadMeetings();
+    }
+  } catch (err) { setStatus("project-status", err.message, true); }
 });
 
 let usersCache = [];
@@ -761,8 +998,60 @@ $("pw-save").addEventListener("click", async () => {
   } catch (err) { setStatus("pw-status", err.message, true); }
 });
 
+async function loadAppRelease() {
+  try {
+    const info = await api("/api/app/android/latest");
+    if (info.available) {
+      const size = (info.size / 1024 / 1024).toFixed(1);
+      $("app-current").innerHTML =
+        `当前发布：<strong>v${esc(info.version_name)}</strong>` +
+        `（versionCode ${info.version_code}，${size} MB）` +
+        (info.notes ? `<br>${esc(info.notes)}` : "");
+      $("app-code").value = Number(info.version_code) + 1;
+      if (!$("app-name").value) {
+        $("app-name").value = info.version_name;
+      }
+    } else {
+      $("app-current").textContent = "尚未上传 APK。上传后手机会在启动时收到升级提示。";
+    }
+  } catch (_) {
+    $("app-current").textContent = "无法读取当前发布信息。";
+  }
+}
+
+$("app-upload").addEventListener("click", async () => {
+  const file = $("app-file").files[0];
+  if (!file) {
+    setStatus("app-status", "请先选择 APK 文件", true);
+    return;
+  }
+  const code = Number($("app-code").value);
+  if (!code || code <= 0) {
+    setStatus("app-status", "请填写有效的版本号", true);
+    return;
+  }
+  const form = new FormData();
+  form.append("file", file);
+  form.append("version_code", String(code));
+  form.append("version_name", $("app-name").value.trim() || String(code));
+  form.append("notes", $("app-notes").value.trim());
+  setStatus("app-status", "正在上传…");
+  try {
+    const resp = await fetch("/api/admin/app-apk", {method: "POST", body: form});
+    let data = {};
+    try { data = await resp.json(); } catch (_) {}
+    if (!resp.ok) {
+      throw new Error((data.error && data.error.message) || ("上传失败 " + resp.status));
+    }
+    setStatus("app-status", `已发布 v${data.release.version_name}，手机启动时会提示升级`);
+    $("app-file").value = "";
+    await loadAppRelease();
+  } catch (err) { setStatus("app-status", err.message, true); }
+});
+
 loadSettings().catch(err => setStatus("llm-status", err.message, true));
-loadMeetings().catch(() => {});
+loadProjects().catch(() => {}).then(() => loadMeetings().catch(() => {}));
 loadUsers().catch(err => setStatus("user-status", err.message, true));
+loadAppRelease();
 </script>
 {% endblock %}
