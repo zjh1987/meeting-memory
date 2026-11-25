@@ -172,6 +172,9 @@ def delete_user(conn, user_id: int, current_user_id: int) -> None:
         raise ValueError("不能删除当前登录账号")
     if user["role"] == "admin" and _admin_count(conn) <= 1:
         raise ValueError("至少保留一个管理员")
+    # 账号删除后，把其会议归到当前管理员，避免数据无主。
+    conn.execute("UPDATE meeting SET owner_id=? WHERE owner_id=?",
+                 (current_user_id, user_id))
     conn.execute("DELETE FROM app_user WHERE id=?", (user_id,))
 
 

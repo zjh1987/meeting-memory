@@ -17,8 +17,16 @@ def ensure_project(conn: sqlite3.Connection, name: str) -> int:
     return int(cur.lastrowid)
 
 
-def list_all(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("SELECT * FROM project ORDER BY id").fetchall()
+def list_all(conn: sqlite3.Connection,
+             owner_id: int | None = None) -> list[dict]:
+    if owner_id is None:
+        rows = conn.execute("SELECT * FROM project ORDER BY id").fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT p.* FROM project p WHERE EXISTS ("
+            " SELECT 1 FROM meeting m WHERE m.project_id=p.id AND m.owner_id=?)"
+            " ORDER BY p.id", (owner_id,)
+        ).fetchall()
     return [dict(r) for r in rows]
 
 

@@ -43,9 +43,11 @@ def _read_meta(path: Path, fallback_title: str) -> dict:
             data = loaded if isinstance(loaded, dict) else {}
         except (ValueError, OSError):
             data = {}
+    explicit_title = str(data.get("title") or "").strip()
     return {
         "project": (data.get("project") or "未归类").strip() or "未归类",
-        "title": (data.get("title") or fallback_title).strip() or fallback_title,
+        "title": (explicit_title or fallback_title).strip() or fallback_title,
+        "title_auto": 0 if explicit_title else 1,
         "recorded_at": _safe_recorded_at(data.get("recorded_at"), path),
         "template_key": str(data.get("template_key") or "").strip(),
         "meta_path": meta_path,
@@ -70,10 +72,15 @@ def _harvest_one(cfg: Config, conn, path: Path) -> bool:
     row = meeting_repo.get_by_uid(conn, safe_uid)
     if row is None:
         pid = project_repo.ensure_project(conn, meta["project"])
+        admin = conn.execute(
+            "SELECT id FROM app_user WHERE role='admin' ORDER BY id LIMIT 1"
+        ).fetchone()
         meeting_id = meeting_repo.create(
             conn, uid=safe_uid, title=meta["title"], project_id=pid,
             recorded_at=meta["recorded_at"], audio_filename=path.name,
             template_key=template_key, status="uploading",
+            owner_id=int(admin["id"]) if admin else None,
+            title_auto=meta["title_auto"],
         )
     else:
         meeting_id = row["id"]

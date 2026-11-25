@@ -305,7 +305,7 @@
   </div>
   <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>会议</th><th>项目</th><th>时间</th><th>状态</th><th>操作</th></tr></thead>
+      <thead><tr><th>会议</th><th>项目</th><th>归属账号</th><th>时间</th><th>状态</th><th>操作</th></tr></thead>
       <tbody id="meetings-list"></tbody>
     </table>
   </div>
@@ -315,7 +315,7 @@
 <div class="card tab-panel hidden" id="panel-users">
   <h2 class="section-title">账号与权限</h2>
   <p class="muted" style="margin-top:-6px">
-    管理员可维护账号与模型设置；普通成员可以查看、上传和阅读纪要，但不能重新生成纪要、结案、重试处理或进入管理后台。
+    管理员可维护账号与模型设置；普通成员只能查看、上传和阅读归属自己的会议纪要，不能重新生成、结案、重试或进入管理后台。
   </p>
   <div style="overflow-x:auto">
     <table>
@@ -672,12 +672,23 @@ $("tpl-reset").addEventListener("click", () => {
 });
 
 let projectsCache = [];
+let usersCache = [];
+let currentUserId = null;
 function projectOptions(selectedId) {
   if (!projectsCache.length) {
     return '<option value="">加载中…</option>';
   }
   return projectsCache.map(p => `
     <option value="${p.id}" ${p.id === selectedId ? "selected" : ""}>${esc(p.name)}</option>
+  `).join("");
+}
+function ownerOptions(selectedId) {
+  if (!usersCache.length) {
+    return '<option value="" disabled selected>加载中…</option>';
+  }
+  const blank = `<option value="" ${selectedId ? "" : "selected"}>未归属</option>`;
+  return blank + usersCache.map(u => `
+    <option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${esc(u.display_name || u.username)}</option>
   `).join("");
 }
 
@@ -689,6 +700,8 @@ async function loadMeetings() {
           ${m.closed ? '<span class="chip closed">已结案</span>' : ""}</td>
       <td><select data-project="${esc(m.uid)}" data-tip="直接调整会议所属项目"
                   style="min-width:120px">${projectOptions(m.project_id)}</select></td>
+      <td><select data-owner="${esc(m.uid)}" data-tip="普通成员仅能看到归属自己的会议"
+                  style="min-width:110px">${ownerOptions(m.owner_id)}</select></td>
       <td class="muted">${esc(m.recorded_at)}</td>
       <td><span class="chip ${m.status === "done" ? "done" : m.status === "failed" ? "failed" : "processing"}">${esc(m.status)}</span></td>
       <td style="white-space:nowrap">
@@ -696,7 +709,7 @@ async function loadMeetings() {
         <button class="btn ghost small" data-close="${esc(m.uid)}" data-closed="${m.closed ? 1 : 0}">${m.closed ? "取消结案" : "结案"}</button>
         <button class="btn danger small" data-remove="${esc(m.uid)}">删除</button>
       </td>
-    </tr>`).join("") || '<tr><td colspan="5" class="muted">暂无会议</td></tr>';
+    </tr>`).join("") || '<tr><td colspan="6" class="muted">暂无会议</td></tr>';
 }
 $("meetings-list").addEventListener("click", async (event) => {
   const regen = event.target.closest("button[data-regen]");
@@ -732,6 +745,22 @@ $("archives-rebuild").addEventListener("click", async () => {
   } catch (err) { setStatus("meetings-status", err.message, true); }
 });
 $("meetings-list").addEventListener("change", async (event) => {
+  const ownerSelect = event.target.closest("select[data-owner]");
+  if (ownerSelect) {
+    try {
+      await api(`/api/admin/meetings/${ownerSelect.dataset.owner}/owner`, {
+        method: "POST",
+        body: JSON.stringify({
+          user_id: ownerSelect.value ? Number(ownerSelect.value) : null
+        })
+      });
+      setStatus("meetings-status", "会议归属账号已更新");
+    } catch (err) {
+      setStatus("meetings-status", err.message, true);
+      await loadMeetings();
+    }
+    return;
+  }
   const select = event.target.closest("select[data-project]");
   if (!select) return;
   if (!select.value) {
@@ -832,8 +861,6 @@ $("projects-list").addEventListener("click", async (event) => {
   } catch (err) { setStatus("project-status", err.message, true); }
 });
 
-let usersCache = [];
-let currentUserId = null;
 async function loadUsers() {
   const data = await api("/api/admin/users");
   usersCache = data.items;
@@ -1050,8 +1077,10 @@ $("app-upload").addEventListener("click", async () => {
 });
 
 loadSettings().catch(err => setStatus("llm-status", err.message, true));
-loadProjects().catch(() => {}).then(() => loadMeetings().catch(() => {}));
-loadUsers().catch(err => setStatus("user-status", err.message, true));
+Promise.all([
+  loadProjects().catch(() => {}),
+  loadUsers().catch(err => setStatus("user-status", err.message, true))
+]).then(() => loadMeetings().catch(() => {}));
 loadAppRelease();
 </script>
 {% endblock %}

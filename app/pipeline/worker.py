@@ -41,6 +41,12 @@ def _run_relations(cfg, conn, meeting):
         fresh = meeting_repo.get_by_id(conn, meeting["id"])
         data = json.loads(fresh["minutes"])
         options = settings_service.relation_settings(conn)
+        owner_id = fresh.get("owner_id")
+        if owner_id:
+            owner = conn.execute("SELECT role FROM app_user WHERE id=?",
+                                 (owner_id,)).fetchone()
+            if owner is None or owner["role"] != "admin":
+                options["owner_id"] = owner_id
         relation_repo.replace(conn, meeting["id"],
                               relations.build_relations(conn, fresh, data, options))
         meeting_repo.set_status(conn, meeting["id"], "done")
@@ -106,6 +112,12 @@ def _process(cfg: Config, conn, meeting: dict) -> None:
             minutes=json.dumps(data, ensure_ascii=False),
             error_code=None, error_msg=None,
         )
+        if meeting.get("title_auto"):
+            auto_title = data.get("title") or minutes_pipeline.derive_title(
+                data, meeting["title"])
+            if auto_title and auto_title != meeting["title"]:
+                meeting_repo.update_fields(conn, meeting["id"],
+                                           title=auto_title)
 
     _run_relations(cfg, conn, meeting)
     _finalize(cfg, conn, meeting)

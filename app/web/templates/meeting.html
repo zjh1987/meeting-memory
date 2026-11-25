@@ -10,6 +10,10 @@
     </div>
   </div>
   <div class="actions">
+    {% if user and not standalone and (user.role == "admin" or m.owner_id == user.id) %}
+    <button class="btn ghost small" id="rename-btn" data-title="{{ m.title }}"
+            data-tip="修改后不再自动命名">重命名</button>
+    {% endif %}
     {% if user and user.role == "admin" and can_retry and not standalone %}
     <button class="btn ghost small retry-action" id="retry-btn"
             data-tip="从上次中断的阶段继续处理">重试</button>
@@ -203,6 +207,19 @@ if (regenBtn) {
   regenBtn.addEventListener("click", async () => {
     if (!confirm("将保留逐字稿，重新调用大模型生成纪要与关联，是否继续？")) return;
     const resp = await fetch("/api/admin/meetings/{{ m.uid }}/regenerate", {method: "POST"});
+    if (resp.ok) location.reload();
+    else alert((await resp.json()).error.message);
+  });
+}
+const renameBtn = document.getElementById("rename-btn");
+if (renameBtn) {
+  renameBtn.addEventListener("click", async () => {
+    const title = prompt("新的会议名称", renameBtn.dataset.title || "");
+    if (title === null) return;
+    const resp = await fetch("/api/meetings/{{ m.uid }}/title", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({title})
+    });
     if (resp.ok) location.reload();
     else alert((await resp.json()).error.message);
   });

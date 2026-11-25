@@ -13,7 +13,8 @@ class MockLlm:
             for m in LINE.finditer(user)
         ]
         if not segments:
-            return {"summary": "无有效内容。", "topics": [{"title": "无内容", "points": [], "segment_ids": []}],
+            return {"title": "无有效内容", "summary": "无有效内容。",
+                    "topics": [{"title": "无内容", "points": [], "segment_ids": []}],
                     "decisions": [], "actions": [], "open_issues": [], "people": []}
 
         topics = []
@@ -39,5 +40,6 @@ class MockLlm:
                   for name in sorted({s["speaker"] for s in segments})]
         summary = "本次会议共 " + str(len(segments)) + " 段发言，讨论了" + \
                   "、".join(t["title"] for t in topics[:3])
-        return {"summary": summary, "topics": topics, "decisions": decisions,
+        return {"title": topics[0]["title"][:20], "summary": summary,
+                "topics": topics, "decisions": decisions,
                 "actions": actions, "open_issues": open_issues, "people": people}

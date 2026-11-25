@@ -382,6 +382,28 @@ def set_meeting_project(uid: str, request: Request, payload: dict = Body(...)):
     return {"ok": True, "project_id": project_id}
 
 
+@router.post("/meetings/{uid}/owner")
+def set_meeting_owner(uid: str, request: Request, payload: dict = Body(...)):
+    conn = db.connect(request.app.state.cfg.db_path)
+    try:
+        row = meeting_repo.get_by_uid(conn, uid)
+        if row is None:
+            raise ApiError(404, "not_found", "会议不存在")
+        raw = payload.get("user_id")
+        owner_id = None
+        if raw not in (None, "", 0, "0"):
+            try:
+                owner_id = int(raw)
+            except (TypeError, ValueError) as exc:
+                raise ApiError(400, "invalid_user", "账号不正确") from exc
+            if user_service.get_user(conn, owner_id) is None:
+                raise ApiError(404, "not_found", "账号不存在")
+        meeting_repo.update_fields(conn, row["id"], owner_id=owner_id)
+    finally:
+        conn.close()
+    return {"ok": True, "owner_id": owner_id}
+
+
 @router.post("/app-apk")
 async def upload_app_apk(request: Request, file: UploadFile = File(...),
                          version_code: int = Form(...),

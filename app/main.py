@@ -78,8 +78,8 @@ def create_app(cfg: Config | None = None, start_threads: bool = True) -> FastAPI
                 )
             return RedirectResponse("/login", status_code=302)
         request.state.user = user
-        if (path == "/admin" or path.startswith("/api/admin")) \
-                and user["role"] != "admin":
+        if (path == "/admin" or path.startswith("/api/admin")
+                or path.startswith("/site")) and user["role"] != "admin":
             if path.startswith("/api/"):
                 return JSONResponse(
                     {"error": {"code": "forbidden", "message": "需要管理员权限"}},

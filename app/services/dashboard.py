@@ -20,19 +20,31 @@ def _shift_month(moment: datetime, offset: int) -> datetime:
     return datetime(year, month, 1)
 
 
-def overview(cfg, conn) -> dict:
+def overview(cfg, conn, owner_id=None) -> dict:
     now = datetime.now()
+    owner_where = " WHERE owner_id=?" if owner_id is not None else ""
+    owner_params = (owner_id,) if owner_id is not None else ()
     totals = conn.execute(
         "SELECT COUNT(*) AS n, COALESCE(SUM(duration_sec),0) AS dur FROM meeting"
-    ).fetchone()
+        + owner_where, owner_params).fetchone()
     month_prefix = now.strftime("%Y-%m")
-    month_count = conn.execute(
-        "SELECT COUNT(*) AS n FROM meeting WHERE substr(recorded_at,1,7)=?",
-        (month_prefix,)).fetchone()["n"]
-    projects = conn.execute("SELECT COUNT(*) AS n FROM project").fetchone()["n"]
+    if owner_id is None:
+        month_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM meeting WHERE substr(recorded_at,1,7)=?",
+            (month_prefix,)).fetchone()["n"]
+        projects = conn.execute("SELECT COUNT(*) AS n FROM project").fetchone()["n"]
+    else:
+        month_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM meeting"
+            " WHERE substr(recorded_at,1,7)=? AND owner_id=?",
+            (month_prefix, owner_id)).fetchone()["n"]
+        projects = conn.execute(
+            "SELECT COUNT(DISTINCT project_id) AS n FROM meeting"
+            " WHERE owner_id=?", (owner_id,)).fetchone()["n"]
 
     status_rows = conn.execute(
-        "SELECT status, COUNT(*) AS n FROM meeting GROUP BY status").fetchall()
+        "SELECT status, COUNT(*) AS n FROM meeting" + owner_where
+        + " GROUP BY status", owner_params).fetchall()
     status_counts = {row["status"]: row["n"] for row in status_rows}
     done = status_counts.get("done", 0)
     failed = status_counts.get("failed", 0)
@@ -44,24 +56,37 @@ def overview(cfg, conn) -> dict:
     for offset in range(-5, 1):
         moment = _shift_month(now, offset)
         key = _month_key(moment)
-        count = conn.execute(
-            "SELECT COUNT(*) AS n FROM meeting WHERE substr(recorded_at,1,7)=?",
-            (key,)).fetchone()["n"]
+        if owner_id is None:
+            count = conn.execute(
+                "SELECT COUNT(*) AS n FROM meeting"
+                " WHERE substr(recorded_at,1,7)=?", (key,)).fetchone()["n"]
+        else:
+            count = conn.execute(
+                "SELECT COUNT(*) AS n FROM meeting"
+                " WHERE substr(recorded_at,1,7)=? AND owner_id=?",
+                (key, owner_id)).fetchone()["n"]
         months.append({"key": key, "label": f"{moment.month}月", "count": count})
     peak = max([m["count"] for m in months] + [1])
     for item in months:
         item["height"] = round(item["count"] / peak * 100, 1)
 
-    recent = conn.execute(
+    recent_sql = (
         "SELECT m.uid, m.title, m.recorded_at, m.status, m.duration_sec,"
         " m.closed, p.name AS project_name FROM meeting m"
-        " JOIN project p ON p.id=m.project_id"
-        " ORDER BY m.recorded_at DESC, m.id DESC LIMIT 6").fetchall()
+        " JOIN project p ON p.id=m.project_id WHERE 1=1")
+    if owner_id is not None:
+        recent_sql += " AND m.owner_id=?"
+    recent = conn.execute(
+        recent_sql + " ORDER BY m.recorded_at DESC, m.id DESC LIMIT 6",
+        owner_params).fetchall()
     recent = [dict(row) for row in recent]
 
+    latest_sql = ("SELECT * FROM meeting"
+                  " WHERE status='done' AND minutes IS NOT NULL")
+    if owner_id is not None:
+        latest_sql += " AND owner_id=?"
     latest_row = conn.execute(
-        "SELECT * FROM meeting WHERE status='done' AND minutes IS NOT NULL"
-        " ORDER BY id DESC LIMIT 1").fetchone()
+        latest_sql + " ORDER BY id DESC LIMIT 1", owner_params).fetchone()
     latest = None
     if latest_row:
         latest = dict(latest_row)

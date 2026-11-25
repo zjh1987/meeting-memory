@@ -13,12 +13,15 @@ def replace(conn: sqlite3.Connection, meeting_id: int, relations: list[dict]) ->
         )
 
 
-def list_for(conn: sqlite3.Connection, meeting_id: int) -> list[dict]:
-    rows = conn.execute(
-        "SELECT r.*, m.title AS target_title, m.uid AS target_uid,"
-        " m.recorded_at AS target_time"
-        " FROM relation r JOIN meeting m ON m.id=r.target_id"
-        " WHERE r.meeting_id=? ORDER BY r.id",
-        (meeting_id,),
-    ).fetchall()
+def list_for(conn: sqlite3.Connection, meeting_id: int,
+             owner_id: int | None = None) -> list[dict]:
+    sql = ("SELECT r.*, m.title AS target_title, m.uid AS target_uid,"
+           " m.recorded_at AS target_time"
+           " FROM relation r JOIN meeting m ON m.id=r.target_id"
+           " WHERE r.meeting_id=?")
+    params: list = [meeting_id]
+    if owner_id is not None:
+        sql += " AND m.owner_id=?"
+        params.append(owner_id)
+    rows = conn.execute(sql + " ORDER BY r.id", params).fetchall()
     return [dict(r) for r in rows]

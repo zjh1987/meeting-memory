@@ -42,6 +42,24 @@ def test_validate_rejects_out_of_range_and_normalizes_owner():
         minutes.validate_minutes(data, 4)
 
 
+def test_title_is_derived_and_limited():
+    data = {
+        "summary": "本次会议围绕数据同步方案进行了讨论，并确认下周完成联调与验收。",
+        "topics": [{"title": "数据同步", "points": [], "segment_ids": [0]}],
+        "decisions": [], "actions": [], "open_issues": [], "people": [],
+    }
+    result = minutes.validate_minutes(data, 4)
+    assert result["title"]
+    assert len(result["title"]) <= minutes.TITLE_MAX
+
+    data["title"] = "《预算讨论会》"
+    assert minutes.validate_minutes(data, 4)["title"] == "预算讨论会"
+
+    data["title"] = "预算" * 30
+    cleaned = minutes.validate_minutes(data, 4)["title"]
+    assert len(cleaned) == minutes.TITLE_MAX
+
+
 def test_generate_with_mock_returns_valid_minutes(cfg):
     result = minutes.generate(cfg, _segments(), "standard")
     assert result["summary"]

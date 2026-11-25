@@ -117,6 +117,47 @@ def test_upload_rejects_invalid_recorded_at(cfg):
         client.__exit__(None, None, None)
 
 
+def test_upload_sets_owner_and_auto_title(cfg):
+    client = _client(cfg)
+    try:
+        conn = db.connect(cfg.db_path)
+        try:
+            admin_id = conn.execute(
+                "SELECT id FROM app_user WHERE username='admin'"
+            ).fetchone()["id"]
+        finally:
+            conn.close()
+
+        def upload(title=None):
+            data = {"project_name": "项目A"}
+            if title is not None:
+                data["title"] = title
+            resp = client.post(
+                "/api/meetings",
+                files={"file": ("a.m4a", b"fake-bytes", "audio/mp4")},
+                data=data)
+            assert resp.status_code == 200
+            conn = db.connect(cfg.db_path)
+            try:
+                return meeting_repo.get_by_uid(conn, resp.json()["uid"])
+            finally:
+                conn.close()
+
+        blank = upload()
+        assert blank["owner_id"] == admin_id
+        assert blank["title_auto"] == 1
+        assert blank["title"].startswith("a")
+
+        explicit = upload("明确的会议名")
+        assert explicit["title_auto"] == 0
+        assert explicit["title"] == "明确的会议名"
+
+        android_default = upload("11月24日 10:30 录音")
+        assert android_default["title_auto"] == 1
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_projects_endpoint(cfg):
     client = _client(cfg)
     try:

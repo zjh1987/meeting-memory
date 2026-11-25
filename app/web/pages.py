@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
+from app.api.auth import can_access_meeting
 from app.core import state
 from app.services import dashboard as dashboard_service
 from app.services import settings as settings_service
@@ -13,9 +14,11 @@ router = APIRouter()
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     cfg = request.app.state.cfg
+    user = request.state.user
+    owner_id = None if user["role"] == "admin" else user["id"]
     conn = db.connect(cfg.db_path)
     try:
-        data = dashboard_service.overview(cfg, conn)
+        data = dashboard_service.overview(cfg, conn, owner_id=owner_id)
     finally:
         conn.close()
     return HTMLResponse(render.render(
@@ -28,12 +31,14 @@ def meeting_list(request: Request, project_id: int | None = None,
                  status: str | None = None, date: str | None = None,
                  page: int = 1):
     cfg = request.app.state.cfg
+    user = request.state.user
+    owner_id = None if user["role"] == "admin" else user["id"]
     conn = db.connect(cfg.db_path)
     try:
         items, total = meeting_repo.list_page(
             conn, project_id=project_id, status=status, date=date,
-            page=max(page, 1), size=15)
-        projects = project_repo.list_all(conn)
+            page=max(page, 1), size=15, owner_id=owner_id)
+        projects = project_repo.list_all(conn, owner_id=owner_id)
     finally:
         conn.close()
     groups: list[dict] = []
@@ -58,9 +63,11 @@ def meeting_list(request: Request, project_id: int | None = None,
 @router.get("/upload", response_class=HTMLResponse)
 def upload_page(request: Request):
     cfg = request.app.state.cfg
+    user = request.state.user
+    owner_id = None if user["role"] == "admin" else user["id"]
     conn = db.connect(cfg.db_path)
     try:
-        projects = project_repo.list_all(conn)
+        projects = project_repo.list_all(conn, owner_id=owner_id)
         templates = settings_service.list_templates(conn)
         asr = settings_service.asr_settings(cfg, conn)
     finally:
@@ -90,9 +97,10 @@ def meeting_page(request: Request, uid: str):
     conn = db.connect(request.app.state.cfg.db_path)
     try:
         meeting = meeting_repo.get_by_uid(conn, uid)
-        if not meeting:
+        user = request.state.user
+        if not can_access_meeting(user, meeting):
             return HTMLResponse("<h1>404</h1><p>会议不存在</p>", status_code=404)
-        ctx = context.build_context(conn, meeting)
+        ctx = context.build_context(conn, meeting, user)
     finally:
         conn.close()
     return HTMLResponse(render.render(

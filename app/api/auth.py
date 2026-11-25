@@ -55,6 +55,15 @@ def require_admin(request: Request) -> None:
         raise ApiError(403, "forbidden", "需要管理员权限")
 
 
+def can_access_meeting(user: dict | None, meeting: dict | None) -> bool:
+    """管理员可访问全部会议；普通成员只能访问归属自己的会议。"""
+    if not user or not meeting:
+        return False
+    if user.get("role") == "admin":
+        return True
+    return meeting.get("owner_id") == user.get("id")
+
+
 class LoginLimiter:
     def __init__(self, max_attempts: int = 5, window_sec: int = 60):
         self.max_attempts = max_attempts

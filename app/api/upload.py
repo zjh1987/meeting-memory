@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,9 @@ from app.services import settings as settings_service
 from app.storage import db, files, meeting_repo, project_repo
 
 router = APIRouter(prefix="/api")
+
+# Android 在用户未填标题时自动生成的时间名，视为“未编辑”，可由纪要自动命名。
+AUTO_TITLE = re.compile(r"^\d{1,2}月\d{1,2}日\s+\d{1,2}:\d{2}\s*录音$")
 
 
 @router.post("/meetings")
@@ -49,7 +53,9 @@ def upload(
     if files.free_gb(cfg.data_dir) < cfg.min_free_gb:
         raise ApiError(503, "storage_full", "服务器磁盘空间不足")
 
-    safe_title = files.sanitize_title(title or Path(file.filename or "").stem)
+    raw_title = title.strip()
+    title_auto = 1 if not raw_title or AUTO_TITLE.fullmatch(raw_title) else 0
+    safe_title = files.sanitize_title(raw_title or Path(file.filename or "").stem)
     uid = files.new_uid()
     meta = {"project": project_name, "title": safe_title,
             "recorded_at": recorded_value}
@@ -74,6 +80,7 @@ def upload(
             conn, uid=uid, title=safe_title, project_id=pid,
             recorded_at=meta["recorded_at"], audio_filename=path.name,
             audio_size=size, template_key=template_key, status="uploading",
+            owner_id=request.state.user["id"], title_auto=title_auto,
         )
     except sqlite3.IntegrityError:
         # Harvester 可能已抢先接管该文件并建了同名 uid 的行。

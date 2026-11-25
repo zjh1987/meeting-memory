@@ -34,6 +34,29 @@ def test_process_once_completes_pipeline(cfg):
     assert list(cfg.site_dir.rglob("index.html"))
 
 
+def test_auto_title_is_generated_from_minutes(cfg):
+    conn = db.connect(cfg.db_path)
+    try:
+        pid = project_repo.ensure_project(conn, "项目A")
+        mid = meeting_repo.create(
+            conn, uid="auto-title", title="11月21日 10:00 录音",
+            project_id=pid, recorded_at="2026-11-21 10:00:00",
+            audio_filename="auto__录音.m4a", title_auto=1)
+    finally:
+        conn.close()
+    (cfg.ready_dir / "auto__录音.m4a").write_bytes(b"audio")
+
+    assert worker.process_once(cfg) is True
+    conn = db.connect(cfg.db_path)
+    try:
+        m = meeting_repo.get_by_id(conn, mid)
+        assert m["title"] != "11月21日 10:00 录音"
+        assert 0 < len(m["title"]) <= 20
+        assert m["title_auto"] == 1
+    finally:
+        conn.close()
+
+
 def test_process_once_returns_false_when_empty(cfg):
     assert worker.process_once(cfg) is False
 

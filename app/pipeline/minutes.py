@@ -1,6 +1,7 @@
 """纪要生成：统一 schema、强制引用、超长文本分块汇总。"""
 
 import json
+import re
 
 from app.config import Config
 from app.providers import build_llm
@@ -9,6 +10,13 @@ REQUIRED_KEYS = ("summary", "topics", "decisions", "actions", "open_issues", "pe
 CHUNK_THRESHOLD = 24000
 CHUNK_SIZE = 8000
 CHUNK_OVERLAP = 300
+TITLE_MAX = 20
+
+_TITLE_DROP = re.compile(r"[\s\"'“”‘’《》〈〉【】\[\]（）()]+")
+_TITLE_PUNCT = "，。；：、！？!?,;:-—…"
+_TITLE_CLAUSE = re.compile(r"[。；;！!？?\n]")
+_TITLE_PREFIX = re.compile(
+    r"^(本次|这次|该次)?会议(主要)?(围绕|就|讨论了|研究了|听取了|对|认为)?")
 
 SYSTEM_PROMPT = """你是资深会议秘书，服务于企事业单位管理层。你的任务是把逐字稿整理成
 可执行、可追溯、无虚构的会议纪要。
@@ -21,6 +29,7 @@ SYSTEM_PROMPT = """你是资深会议秘书，服务于企事业单位管理层�
 4. 合并重复表述，保留关键数字、日期、人名与结论，删除寒暄和口头语。
 5. 区分事实、观点与决定，不要把个人判断写成会议结论。
 6. 输出严格 JSON，顶层字段固定为：
+title(string，20 个汉字以内，概括会议主题，不要标点)、
 summary(string)、topics(list)、decisions(list)、actions(list)、open_issues(list)、
 people(list)、custom_sections(list)。
 topics 每条：{"title": str, "points": [str], "segment_ids": [int]}。
@@ -45,6 +54,46 @@ class MinutesValidationError(Exception):
 def _timestamp(seconds) -> str:
     total = int(float(seconds))
     return f"{total // 3600:02d}:{total % 3600 // 60:02d}:{total % 60:02d}"
+
+
+def _normalize_title(raw) -> str:
+    text = _TITLE_DROP.sub("", str(raw or ""))
+    return text.strip(_TITLE_PUNCT)
+
+
+def clean_title(raw, limit: int = TITLE_MAX) -> str:
+    text = _normalize_title(raw)
+    if len(text) > limit:
+        text = text[:limit].rstrip(_TITLE_PUNCT)
+    return text
+
+
+def derive_title(minutes: dict, fallback: str = "") -> str:
+    """优先用模型给出的标题；缺失时从摘要首句提取，控制在 20 字以内。"""
+    title = clean_title(minutes.get("title"))
+    if title:
+        return title
+    summary = str(minutes.get("summary") or "").strip()
+    for clause in _TITLE_CLAUSE.split(summary):
+        candidate = _normalize_title(
+            _TITLE_PREFIX.sub("", clause.strip()).strip("，,、：: "))
+        if len(candidate) < 4:
+            continue
+        if len(candidate) <= TITLE_MAX:
+            return candidate
+        for part in re.split(r"[，,、：:；;]", candidate):
+            part = _normalize_title(part)
+            if 4 <= len(part) <= TITLE_MAX:
+                return part
+        return clean_title(candidate)
+    cleaned = clean_title(summary)
+    if cleaned:
+        return cleaned
+    for topic in minutes.get("topics") or []:
+        cleaned = clean_title(topic.get("title"))
+        if cleaned:
+            return cleaned
+    return clean_title(fallback)
 
 
 def build_user_prompt(segments: list[dict], glossary: list[str] | None = None,
@@ -72,6 +121,7 @@ def validate_minutes(data: dict, segment_count: int) -> dict:
     summary = data.get("summary")
     if not isinstance(summary, str) or not summary.strip():
         raise MinutesValidationError("summary 为空")
+    title = derive_title(data)
     topics = data.get("topics")
     if not isinstance(topics, list) or not topics:
         raise MinutesValidationError("topics 为空")
@@ -124,6 +174,7 @@ def validate_minutes(data: dict, segment_count: int) -> dict:
                                      "title": title, "items": items})
 
     result = {key: data[key] for key in REQUIRED_KEYS}
+    result["title"] = title
     result["custom_sections"] = cleaned_sections
     return result
 
@@ -155,12 +206,15 @@ def chunk_segments(segments: list[dict], max_chars: int = CHUNK_SIZE,
 
 def merge_parts(parts: list[dict]) -> dict:
     merged = {key: [] for key in REQUIRED_KEYS}
+    merged["title"] = ""
     merged["summary"] = ""
     merged["custom_sections"] = []
     seen: set[str] = set()
     summaries: list[str] = []
     custom: dict[str, dict] = {}
     for part in parts:
+        if not merged["title"] and part.get("title"):
+            merged["title"] = part["title"]
         if part.get("summary"):
             summaries.append(part["summary"])
         for key in ("topics", "decisions", "actions", "open_issues", "people"):

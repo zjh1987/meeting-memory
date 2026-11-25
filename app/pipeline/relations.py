@@ -111,7 +111,8 @@ def build_relations(conn, meeting: dict, minutes: dict,
 
     candidates = meeting_repo.relation_candidates(
         conn, meeting["project_id"], meeting["id"],
-        since=_since(meeting, window_days), limit=SCAN_LIMIT)
+        since=_since(meeting, window_days), owner_id=options.get("owner_id"),
+        limit=SCAN_LIMIT)
 
     current_topics = minutes.get("topics", [])
     current_actions = minutes.get("actions", [])

@@ -9,7 +9,7 @@ FIELDS = {
     "title", "project_id", "template_key", "recorded_at", "duration_sec",
     "audio_filename", "audio_size", "status", "error_code", "error_msg",
     "retry_count", "next_retry_at", "transcript", "minutes", "closed",
-    "asr_seconds", "audio_seconds",
+    "asr_seconds", "audio_seconds", "owner_id", "title_auto",
     "started_at", "finished_at", "heartbeat_at",
 }
 
@@ -19,14 +19,16 @@ def now_str() -> str:
 
 
 def create(conn, *, uid, title, project_id, recorded_at, audio_filename,
-           audio_size=0, template_key="standard", status="pending") -> int:
+           audio_size=0, template_key="standard", status="pending",
+           owner_id: int | None = None, title_auto: int = 0) -> int:
     ts = now_str()
     cur = conn.execute(
         "INSERT INTO meeting (uid, title, project_id, template_key, recorded_at,"
-        " audio_filename, audio_size, status, created_at, updated_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?)",
+        " audio_filename, audio_size, status, owner_id, title_auto,"
+        " created_at, updated_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (uid, title, project_id, template_key, recorded_at,
-         audio_filename, audio_size, status, ts, ts),
+         audio_filename, audio_size, status, owner_id, title_auto, ts, ts),
     )
     return int(cur.lastrowid)
 
@@ -41,8 +43,12 @@ def get_by_id(conn, meeting_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def list_page(conn, project_id=None, status=None, date=None, page=1, size=20):
+def list_page(conn, project_id=None, status=None, date=None, page=1, size=20,
+              owner_id=None):
     where, params = [], []
+    if owner_id is not None:
+        where.append("m.owner_id=?")
+        params.append(owner_id)
     if project_id:
         where.append("m.project_id=?")
         params.append(project_id)
@@ -168,11 +174,14 @@ def previous_done(conn, project_id: int, before_id: int, limit: int = 5) -> list
 
 
 def relation_candidates(conn, project_id: int, before_id: int,
-                        since: str | None = None,
+                        since: str | None = None, owner_id: int | None = None,
                         limit: int = 60) -> list[dict]:
     """关联候选：同项目、已完成、未结案，按录音时间从新到旧。"""
     where = ["project_id=?", "id<?", "status='done'", "closed=0"]
     params: list = [project_id, before_id]
+    if owner_id is not None:
+        where.append("owner_id=?")
+        params.append(owner_id)
     if since:
         where.append("recorded_at>=?")
         params.append(since)

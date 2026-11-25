@@ -193,6 +193,44 @@ def test_admin_can_move_single_meeting(cfg):
         conn.close()
 
 
+def test_admin_can_change_meeting_owner(cfg):
+    client = _client(cfg)
+    created = client.post("/api/admin/users", json={
+        "username": "owner-member", "display_name": "归属成员",
+        "password": "member-pass", "role": "member"})
+    member_id = created.json()["user"]["id"]
+    conn = db.connect(cfg.db_path)
+    try:
+        pid = project_repo.ensure_project(conn, "项目A")
+        meeting_repo.create(
+            conn, uid="m-owner", title="待归属会议", project_id=pid,
+            recorded_at="2026-11-23 09:00:00", audio_filename="m-owner__a.m4a",
+            status="done")
+    finally:
+        conn.close()
+
+    resp = client.post("/api/admin/meetings/m-owner/owner",
+                       json={"user_id": member_id})
+    assert resp.status_code == 200
+    conn = db.connect(cfg.db_path)
+    try:
+        assert meeting_repo.get_by_uid(conn, "m-owner")["owner_id"] == member_id
+    finally:
+        conn.close()
+
+    member = TestClient(create_app(cfg, start_threads=False))
+    member.post("/login", data={"username": "owner-member",
+                                "password": "member-pass"})
+    assert member.get("/m/m-owner").status_code == 200
+    assert member.post("/api/admin/meetings/m-owner/owner",
+                       json={"user_id": member_id}).status_code == 403
+
+    cleared = client.post("/api/admin/meetings/m-owner/owner",
+                          json={"user_id": None})
+    assert cleared.status_code == 200
+    assert member.get("/m/m-owner").status_code == 404
+
+
 def test_app_release_upload_and_public_download(cfg):
     client = _client(cfg)
     resp = client.post(

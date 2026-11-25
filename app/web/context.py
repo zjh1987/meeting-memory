@@ -36,7 +36,7 @@ def failure_hint(meeting: dict) -> str:
     return "处理未完成，录音已保留，可直接重试。"
 
 
-def build_context(conn, meeting: dict) -> dict:
+def build_context(conn, meeting: dict, user: dict | None = None) -> dict:
     minutes = json.loads(meeting["minutes"]) if meeting["minutes"] else {}
     transcript = json.loads(meeting["transcript"]) if meeting["transcript"] else []
     project = conn.execute(
@@ -45,12 +45,15 @@ def build_context(conn, meeting: dict) -> dict:
     tmpl = settings_service.get_template(conn, meeting["template_key"])
     custom_minutes = {section.get("key"): section
                       for section in minutes.get("custom_sections", [])}
+    owner_scope = None
+    if user and user.get("role") != "admin":
+        owner_scope = user["id"]
     return {
         "minutes": minutes,
         "transcript": transcript,
         "custom_minutes": custom_minutes,
         "actions": action_repo.list_for(conn, meeting["id"]),
-        "relations": relation_repo.list_for(conn, meeting["id"]),
+        "relations": relation_repo.list_for(conn, meeting["id"], owner_scope),
         "tmpl": tmpl,
         "project_name": project["name"] if project else "未归类",
         "finished": meeting["status"] == "done",
