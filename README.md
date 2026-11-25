@@ -68,6 +68,14 @@ cd android
 
 超长会议（超过 2048 个语音片段）会走 FunASR 的 UMAP 说话人聚类分支。服务端已加入 CUDA/NumPy 兼容修复，并在聚类异常时降级为单一说话人，保证逐字稿和纪要仍能生成。会议详情页在失败时会显示可读原因和“技术详情”，原始音频保留在服务器，可直接点“重试处理”；如果提示超过时长上限，请缩短录音或调大 `MAX_DURATION_MIN`。
 
+## Windows 录音端
+
+[`desktop/`](desktop/) 提供一个轻量单文件 exe：登录后一键开始、暂停、结束录音，结束后自动上传并跟踪纪要生成状态。只包含登录与录音界面，支持外接拾音器选择、系统托盘、断网待上传重试和崩溃录音修复。
+
+- 源码与构建说明：[desktop/README.md](desktop/README.md)
+- 构建：`cd desktop && .\build.ps1`
+- 产物：`desktop\dist\MeetingMemoryRecorder-v1.1.0.exe`
+
 ## 技术栈
 
 Python 3.10 · FastAPI · Jinja2 · SQLite · FunASR · PyTorch · FFmpeg · Docker

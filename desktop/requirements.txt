@@ -1,0 +1,6 @@
+requests>=2.31
+sounddevice>=0.5
+numpy>=1.26
+pystray>=0.19
+Pillow>=10
+customtkinter>=6.0
